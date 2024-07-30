@@ -107,6 +107,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
             EventData::Query(t) => println!("{};", t.query),
             EventData::TableMap(t) => {
                 // println!("table event:{:?}", t);
+
                 let db_name = t.database_name;
                 let table_name = t.table_name;
                 if db_name == "mysql" {
@@ -126,10 +127,11 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 parse_sql_with_error(new_data, column_list, db_name, table_name).await?;
                 count += 1;
             }
+            EventData::Gtid(t) => println!("gtid:{:?}", t),
             EventData::Xid(_) => println!("END;"),
             _ => {}
         }
-        if count % 100 == 0 {
+        if count % 10 == 0 {
             println!("count is :{}", count);
         }
     }

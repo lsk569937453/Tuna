@@ -1,0 +1,2 @@
+# README
+## mysqlbinlog  vs mysqldump
