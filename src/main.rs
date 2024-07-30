@@ -62,7 +62,7 @@ async fn parse_colomns(database: String, table_name: String) -> Result<Vec<Strin
         let item: String = it.get(0);
         res.push(item);
     }
-    println!("res: {:?}", res);
+    // println!("res: {:?}", res);
     Ok(res)
 }
 async fn test_binlog_with_file() -> Result<(), anyhow::Error> {
@@ -94,22 +94,26 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
 
     let mut client = BinlogClient {
         url: String::from("mysql://root:root@127.0.0.1:9306"),
-        binlog_filename: String::from("mysql-bin.000003"),
+        binlog_filename: "mysql-binlog.000001".to_string(),
         binlog_position: 0,
         server_id: 1,
     };
 
     let mut stream = client.connect().await?;
-
+    let mut count = 0;
     loop {
-        let (_, data) = stream.read().await?;
-
+        let (header, data) = stream.read().await?;
         match data {
             EventData::Query(t) => println!("{};", t.query),
             EventData::TableMap(t) => {
+                // println!("table event:{:?}", t);
                 let db_name = t.database_name;
                 let table_name = t.table_name;
-                let s = cache.get(&db_name).await;
+                if db_name == "mysql" {
+                    continue;
+                }
+                let key = format!("{}{}", db_name, table_name);
+                let s = cache.get(&key).await;
 
                 let column_list = if s.is_none() {
                     let v = parse_colomns(db_name.clone(), table_name.clone()).await?;
@@ -120,9 +124,13 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 };
                 let (_, new_data) = stream.read().await?;
                 parse_sql_with_error(new_data, column_list, db_name, table_name).await?;
+                count += 1;
             }
             EventData::Xid(_) => println!("END;"),
             _ => {}
+        }
+        if count % 100 == 0 {
+            println!("count is :{}", count);
         }
     }
     Ok(())
@@ -159,6 +167,10 @@ async fn parse_insert_sql(
     for (index, item) in row_event.column_values.iter().enumerate() {
         match item {
             ColumnValue::Long(v) => {
+                column_name.push(column_list[index].clone());
+                column_value.push(format!("{}", v));
+            }
+            ColumnValue::LongLong(v) => {
                 column_name.push(column_list[index].clone());
                 column_value.push(format!("{}", v));
             }
