@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
+anyhow = "1.0.80"
 tokio = { version = "1.32.0", features = ["full"] }
 clap = { version = "4.4.1", features = ["derive"] }
 log = "0.4.20"
@@ -17,3 +17,8 @@ rand = "0.8.5"
 sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "mysql"] }
 futures = "0.3.30"
 moka = { version = "0.12", features = ["future"] }
+axum = "0.7.5"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2.3"

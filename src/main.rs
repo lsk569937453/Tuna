@@ -2,22 +2,27 @@ use anyhow::anyhow;
 
 use clap::builder::Str;
 use futures::TryStreamExt;
+use moka::future::Cache;
+use mysql_binlog_connector_rust::binlog_parser::BinlogParser;
 use mysql_binlog_connector_rust::event::delete_rows_event::DeleteRowsEvent;
 use mysql_binlog_connector_rust::event::update_rows_event::UpdateRowsEvent;
 use mysql_binlog_connector_rust::event::write_rows_event::WriteRowsEvent;
-use rand::{seq::IteratorRandom, thread_rng}; // 0.6.1
-use sqlx::mysql::MySqlPoolOptions;
-use sqlx::{any, Connection, Row};
-use std::{collections::HashMap, hash::Hash, vec};
-
-use moka::future::Cache;
-use mysql_binlog_connector_rust::binlog_parser::BinlogParser;
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
     column::{column_value::ColumnValue, json::json_binary::JsonBinary},
     event::{event_data::EventData, row_event::RowEvent},
 };
+use rand::{seq::IteratorRandom, thread_rng}; // 0.6.1
 use sqlx::mysql::MySqlConnection;
+use sqlx::mysql::MySqlPoolOptions;
+use sqlx::{any, Connection, Row};
+use std::{collections::HashMap, hash::Hash, vec};
+use tracing_appender::non_blocking::NonBlockingBuilder;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_appender::rolling;
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
 async fn create_data() -> Result<(), anyhow::Error> {
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
@@ -27,7 +32,7 @@ async fn create_data() -> Result<(), anyhow::Error> {
     for i in 0..1000 {
         let i_str = i.to_string();
         let i_next_str = (i + 1).to_string();
-        sqlx::query("insert into user(username,first_name,last_name)values(?,?,?)")
+        sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
             .bind(i_str.clone())
             .bind(i_str.clone())
             .bind(i_str.clone())
@@ -43,11 +48,49 @@ async fn create_data() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
+    let app_file = rolling::daily("./logs", "access.log");
+    let (non_blocking_appender, guard) = NonBlockingBuilder::default()
+        .buffered_lines_limit(10)
+        .finish(app_file);
+    let file_layer = tracing_subscriber::fmt::Layer::new()
+        .with_target(true)
+        .with_ansi(false)
+        .with_writer(non_blocking_appender)
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+
+    tracing_subscriber::registry()
+        .with(file_layer)
+        .with(tracing_subscriber::filter::LevelFilter::TRACE)
+        .init();
+    Ok(guard)
+}
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    if let Err(e) = test_binlog_with_realtime().await {
-        println!("error: {:?}", e);
+async fn main() {
+    if let Err(e) = main_with_error().await {
+        println!("{:?}", e);
     }
+}
+async fn main_with_error() -> Result<(), anyhow::Error> {
+    let _work_guard = setup_logger()?;
+    let db_pool = common::sql_connections::create_pool().await?;
+    init_with_error(db_pool.clone()).await?;
+    // build our application with a route
+    let app = Router::new()
+        // `GET /` goes to `root`
+        .route("/", get(root))
+        // `POST /users` goes to `create_user`
+        .route("/vessel", get(get_vessl))
+        .route("/api/adminLogin", post(admin_login))
+        .route("/api/login", post(login))
+        .route("/api/deleteUser", post(delete_user))
+        .route("/api/addUser", post(add_user))
+        .route("/api/updateUser", post(update_user))
+        .with_state(db_pool);
+
+    // run our app with hyper, listening globally on port 3000
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
     Ok(())
 }
 async fn parse_colomns(database: String, table_name: String) -> Result<Vec<String>, anyhow::Error> {
@@ -181,6 +224,9 @@ async fn parse_insert_sql(
                 column_value.push(format!(r#""{}""#, String::from_utf8_lossy(v)));
             }
             ColumnValue::None => {
+                continue;
+            }
+            ColumnValue::Blob(s) => {
                 continue;
             }
             _ => {
