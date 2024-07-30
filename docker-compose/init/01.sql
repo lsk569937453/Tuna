@@ -13,3 +13,10 @@ CREATE TABLE IF NOT EXISTS `user` (
   `status` tinyint(10) DEFAULT NULL,
   PRIMARY KEY (`user_id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=10001 ;
+CREATE TABLE IF NOT EXISTS `post` (
+  `post_id` int(11) NOT NULL AUTO_INCREMENT,
+  `tile` varchar(255) DEFAULT NULL,
+  `content` varchar(50) DEFAULT NULL,
+  `status` tinyint(10) DEFAULT NULL,
+  PRIMARY KEY (`post_id`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=10001 ;
