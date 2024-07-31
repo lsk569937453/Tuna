@@ -16,8 +16,11 @@ use service::database_service::get_database_list;
 use service::datasource_service::create_datasource;
 mod common;
 mod dao;
+use tracing_subscriber::fmt::Layer as FmtLayer;
+
 use crate::common::init::init_with_error;
 mod service;
+use tracing_subscriber::Layer;
 mod vojo;
 use axum::routing::get;
 use axum::routing::post;
@@ -32,7 +35,6 @@ use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
 #[macro_use]
 extern crate tracing;
 #[macro_use]
@@ -72,9 +74,13 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
         .with_ansi(false)
         .with_writer(non_blocking_appender)
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
-
+    let console_layer = FmtLayer::new()
+        .with_target(true)
+        .with_ansi(true)
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
     tracing_subscriber::registry()
         .with(file_layer)
+        .with(console_layer)
         .with(tracing_subscriber::filter::LevelFilter::TRACE)
         .init();
     Ok(guard)

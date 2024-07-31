@@ -8,6 +8,7 @@ use axum::http::header;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
+use clap::builder::Str;
 use sqlx::mysql::MySqlConnectOptions;
 use sqlx::mysql::MySqlRow;
 use sqlx::Connection;
@@ -33,15 +34,17 @@ async fn get_database_list_with_error(
         .fetch_one(&pool)
         .await??;
     let mut conn = MySqlConnection::connect(&datasource_url).await?;
-    let res = sqlx::query(
+    let sql_rows= sqlx::query(
         "SHOW DATABASES WHERE `Database` NOT IN ('mysql', 'performance_schema', 'sys','information_schema')",
     )
     .fetch_all(&mut conn)
-    .await
-    .map_err(|e| anyhow!("{}", e))?
-    .iter()
-    .map(|row| row.try_get::<String, _>(0))
-    .collect::<Result<Vec<String>, _>>()?;
+    .await?;
+
+    let mut res = vec![];
+    for it in sql_rows.iter() {
+        let item: Vec<u8> = it.try_get::<Vec<u8>, _>(0)?;
+        res.push(String::from_utf8(item)?);
+    }
     let data = BaseResponse {
         response_code: 0,
         response_object: res,
