@@ -12,6 +12,14 @@ use mysql_binlog_connector_rust::{
     column::{column_value::ColumnValue, json::json_binary::JsonBinary},
     event::{event_data::EventData, row_event::RowEvent},
 };
+use service::datasource_service::create_datasource;
+mod common;
+mod dao;
+use crate::common::init::init_with_error;
+mod service;
+mod vojo;
+use axum::routing::post;
+use axum::Router;
 use rand::{seq::IteratorRandom, thread_rng}; // 0.6.1
 use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
@@ -23,6 +31,10 @@ use tracing_appender::rolling;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::Layer;
+#[macro_use]
+extern crate tracing;
+#[macro_use]
+extern crate anyhow;
 async fn create_data() -> Result<(), anyhow::Error> {
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
@@ -75,22 +87,12 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     let _work_guard = setup_logger()?;
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
-    // build our application with a route
     let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/vessel", get(get_vessl))
-        .route("/api/adminLogin", post(admin_login))
-        .route("/api/login", post(login))
-        .route("/api/deleteUser", post(delete_user))
-        .route("/api/addUser", post(add_user))
-        .route("/api/updateUser", post(update_user))
+        .route("/datasource", post(create_datasource))
         .with_state(db_pool);
-
-    // run our app with hyper, listening globally on port 3000
+    let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, final_route).await.unwrap();
     Ok(())
 }
 async fn parse_colomns(database: String, table_name: String) -> Result<Vec<String>, anyhow::Error> {
