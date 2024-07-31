@@ -12,12 +12,14 @@ use mysql_binlog_connector_rust::{
     column::{column_value::ColumnValue, json::json_binary::JsonBinary},
     event::{event_data::EventData, row_event::RowEvent},
 };
+use service::database_service::get_database_list;
 use service::datasource_service::create_datasource;
 mod common;
 mod dao;
 use crate::common::init::init_with_error;
 mod service;
 mod vojo;
+use axum::routing::get;
 use axum::routing::post;
 use axum::Router;
 use rand::{seq::IteratorRandom, thread_rng}; // 0.6.1
@@ -89,6 +91,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     init_with_error(db_pool.clone()).await?;
     let app = Router::new()
         .route("/datasource", post(create_datasource))
+        .route("/database/:id", get(get_database_list))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
