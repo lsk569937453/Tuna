@@ -13,7 +13,7 @@ use mysql_binlog_connector_rust::{
     event::{event_data::EventData, row_event::RowEvent},
 };
 use service::database_service::get_database_list;
-use service::datasource_service::create_datasource;
+use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
 mod dao;
 use tracing_subscriber::fmt::Layer as FmtLayer;
@@ -21,6 +21,7 @@ use tracing_subscriber::fmt::Layer as FmtLayer;
 use crate::common::init::init_with_error;
 mod service;
 use tracing_subscriber::Layer;
+mod util;
 mod vojo;
 use axum::routing::get;
 use axum::routing::post;
@@ -96,7 +97,10 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
     let app = Router::new()
-        .route("/datasource", post(create_datasource))
+        .route(
+            "/datasource",
+            post(create_datasource).get(get_datasource_list),
+        )
         .route("/database/:id", get(get_database_list))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
