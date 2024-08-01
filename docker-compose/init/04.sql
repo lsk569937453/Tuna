@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS task_running_info (
     task_id VARCHAR(255) NOT NULL,
     status INT NOT NULL,
     worker_ip VARCHAR(255) NOT NULL,
-    offset  VARCHAR(500) NOT NULL,
-    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE INDEX task_name_index(task)
+    offset
+        VARCHAR(500) NOT NULL,
+        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

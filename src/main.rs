@@ -2,6 +2,8 @@ use anyhow::anyhow;
 
 use futures::StreamExt;
 use moka::future::Cache;
+use mysql_async::binlog::events::{RowsEventData, TableMapEvent, WriteRowsEvent};
+use mysql_async::binlog::value::BinlogValue;
 use mysql_common::proto::MySerialize;
 use service::database_service::get_database_list;
 use service::datasource_service::{create_datasource, get_datasource_list};
@@ -22,7 +24,7 @@ use axum::Router;
 use rand::{seq::IteratorRandom, thread_rng}; // 0.6.1
 use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
-use std::io::Write;
+use std::io::{Read, Write};
 
 use sqlx::{any, Connection, Row};
 use std::{collections::HashMap, hash::Hash, vec};
@@ -119,107 +121,17 @@ async fn parse_colomns(database: String, table_name: String) -> Result<Vec<Strin
     // println!("res: {:?}", res);
     Ok(res)
 }
-// async fn test_binlog_with_file() -> Result<(), anyhow::Error> {
-//     let file_path = "d:/mysql-bin.000003";
-//     let mut file = std::fs::File::open(file_path).unwrap();
 
-//     let mut parser = BinlogParser {
-//         checksum_length: 4,
-//         table_map_event_by_table_id: HashMap::new(),
-//     };
-
-//     assert!(parser.check_magic(&mut file).is_ok());
-//     loop {
-//         if let Ok((header, data)) = parser.next(&mut file) {
-//             println!("header: {:?}", header);
-//             println!("data: {:?}", data);
-//             parse_json_columns(data);
-
-//             println!("");
-//         } else {
-//             println!("parse error")
-//         }
-//     }
-//     let sql="SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION";
-//     Ok(())
-// }
-// pub fn as_the_bytes(
-//     server_id: i32,
-//     gtid_set: String,
-//     file_name: String,
-// ) -> Result<Vec<u8>, anyhow::Error> {
-//     let mut buf = Vec::new();
-
-//     // Command byte for COM_BINLOG_DUMP_GTID
-//     buf.write_u8(CommandType::BinlogDumpGtid as u8)?;
-
-//     // Flags
-//     let binlog_flags = 0;
-//     buf.write_u32::<LittleEndian>(binlog_flags)?;
-
-//     // Server-ID
-//     buf.write_u32::<LittleEndian>(server_id as u32)?;
-
-//     buf.write_all(file_name.as_bytes())?;
-
-//     // GTID Set
-//     let gtid_set_bytes = gtid_set.as_bytes();
-//     let gtid_set_len = gtid_set_bytes.len() as u32;
-
-//     // Data Size
-//     buf.write_u32::<LittleEndian>(gtid_set_len)?;
-
-//     // GTID Set data
-//     buf.write_all(gtid_set_bytes)?;
-
-//     Ok(buf)
-// }
-// async fn connect_myself(
-//     url: String,
-//     server_id: i32,
-//     gtid_set: String,
-//     file_name: String,
-// ) -> Result<BinlogStream, anyhow::Error> {
-//     let mut authenticator =
-//         Authenticator::new(&url).map_err(|e| anyhow!("Authenticator error{}", e))?;
-//     let mut channel = authenticator
-//         .connect()
-//         .await
-//         .map_err(|e| anyhow!("channel connect error{}", e))?;
-//     // fetch binlog checksum
-//     let binlog_checksum = CommandUtil::fetch_binlog_checksum(&mut channel)
-//         .await
-//         .map_err(|e| anyhow!("fetch_binlog_checksum{}", e))?;
-//     println!("aa");
-//     // setup connection
-//     CommandUtil::setup_binlog_connection(&mut channel)
-//         .await
-//         .map_err(|e| anyhow!("setup_binlog_connection {}", e))?;
-//     println!("aa2");
-
-//     let buf = as_the_bytes(server_id, gtid_set, file_name)?;
-//     println!("aa3");
-
-//     channel
-//         .write(&buf, 0)
-//         .await
-//         .map_err(|e| anyhow!("channel write error{}", e))?;
-//     println!("aa4");
-
-//     let parser = BinlogParser {
-//         checksum_length: binlog_checksum.get_length(),
-//         table_map_event_by_table_id: HashMap::new(),
-//     };
-
-//     Ok(BinlogStream { channel, parser })
-// }
-use mysql_async::Conn;
-use mysql_async::Opts;
+use mysql_async::{Conn, Sid};
+use mysql_async::{Opts, Value};
 use mysql_common::binlog::events::EventData;
 async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     let cache: Cache<String, Vec<String>> = Cache::new(10_000);
-    let mut mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
-    let input = "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5:10-15:20-";
+    println!("a");
+    let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
+    let input = "e914a9a2-4ff6-11ef-9eca-0242ac130002:3014";
+    let sid = input.parse::<Sid>()?;
+
     // let e = input.parse::<Sid>().unwrap_err();
     let mut stream = mysql
         .get_binlog_stream(
@@ -228,82 +140,160 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 .with_gtid_set(vec![]),
         )
         .await?;
-    // let mut client = BinlogClient {
-    //     url: String::from("mysql://root:root@127.0.0.1:9306"),
-    //     binlog_filename: "mysql-binlog.000001".to_string(),
-    //     binlog_position: 0,
-    //     server_id: 1,
-    // };
-    // let mut stream = client.connect().await?;
+    println!("a1");
 
     let mut count = 0;
-    while let Some(Ok(data)) = stream.next().await {
-        let event_data = data.read_data()?.unwrap();
+    println!("a12");
 
-        println!("{:?}", event_data);
+    while let Some(Ok(data)) = stream.next().await {
+        let event_data = data.read_data()?.ok_or(anyhow!("sssss"))?;
+
         match event_data {
             EventData::QueryEvent(query) => {
-                println!("query: {:?}", 1);
+                println!("{}", String::from_utf8_lossy(query.query_raw()));
             }
-            EventData::TableMapEvent(table_map) => {
-                println!("table_map: {:?}", table_map);
+            EventData::TableMapEvent(table_map_event) => {
+                let db_name = table_map_event.database_name();
+                let table_name = table_map_event.table_name();
+                if db_name == "mysql"
+                    || db_name == "performance_schema"
+                    || db_name == "information_schema"
+                    || db_name == "sys"
+                {
+                    continue;
+                }
+                let key = format!("{}{}", db_name, table_name);
+                let s = cache.get(&key).await;
+
+                let column_list = if s.is_none() {
+                    let v =
+                        parse_colomns(db_name.to_string().clone(), table_name.to_string().clone())
+                            .await?;
+                    cache.insert(db_name.to_string().clone(), v.clone()).await;
+                    v
+                } else {
+                    s.unwrap()
+                };
+                if let Some(Ok(new_data)) = stream.next().await {
+                    let new_event_data = new_data.read_data()?.ok_or(anyhow!("sssss"))?;
+
+                    parse_sql_with_error(new_event_data, table_map_event, column_list).await?;
+                }
             }
             EventData::GtidEvent(gtid_event) => {
-                let t = gtid_event.sid();
-
+                // println!("{:?}", gtid_event);
+                let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
                 println!(
-                    "gtid:============================== {:?}",
-                    String::from_utf8_lossy(&t)
+                    "gtid:=============================={}:{}",
+                    gtid.to_string(),
+                    gtid_event.gno()
                 );
             }
+            EventData::XidEvent(e) => {
+                println!("COMMIT;");
+            }
+            _ => {
+                // println!("{:?}", event_data);
+            }
+        }
+        // if count % 10 == 0 {
+        //     println!("count is :{}", count);
+        // }
+    }
+    Ok(())
+}
+async fn parse_sql_with_error(
+    data: EventData<'_>,
+    table_map_event: TableMapEvent<'_>,
+    column_list: Vec<String>,
+    // db_name: String,
+    // table_name: String,
+) -> Result<(), anyhow::Error> {
+    match data {
+        EventData::RowsEvent(rows_event_data) => match rows_event_data {
+            RowsEventData::WriteRowsEvent(write_rows_event) => {
+                parse_insert_sql(write_rows_event, table_map_event, column_list).await?;
+            }
+            RowsEventData::UpdateRowsEvent(update_rows_event) => {
+                println!("update_rows_event: {:?}", update_rows_event);
+            }
+            RowsEventData::DeleteRowsEvent(delete_rows_event) => {
+                println!("delete_rows_event: {:?}", delete_rows_event);
+            }
             _ => {}
-        }
-        if count % 10 == 0 {
-            println!("count is :{}", count);
-        }
-    }
-    Ok(())
-}
+        },
 
-fn test() -> Result<(), anyhow::Error> {
-    let mut v = vec![
-        "red-1", "red-2", "red-3", "red-4", "red-5", "blue-1", "blue-2", "blue-3", "blue-4",
-        "blue-5", "yellow-1", "yellow-2", "yellow-3", "yellow-4", "yellow-5",
-    ];
-    let mut result_0 = 0;
-    let mut result_1 = 0;
-    for i in 0..1000 {
-        let res = test_1(v.clone())?;
-        if res == 0 {
-            result_0 += 1;
-        } else {
-            result_1 += 1;
-        }
+        _ => {}
     }
-    println!("result_0: {}, result_1: {}", result_0, result_1);
     Ok(())
 }
-fn test_1(v: Vec<&str>) -> Result<i32, anyhow::Error> {
-    let mut rng = thread_rng();
-    let sample = v.iter().choose_multiple(&mut rng, 12);
-    let mut hashmap = HashMap::new();
-    for item in sample {
-        let key = item.split("-").next().ok_or(anyhow!("error"))?;
-        if let Some(count) = hashmap.get(&key) {
-            hashmap.insert(key, count + 1);
-        } else {
-            hashmap.insert(key, 1);
-        };
+async fn parse_insert_sql(
+    write_rows_event: WriteRowsEvent<'_>,
+    table_map_event: TableMapEvent<'_>,
+    column_list: Vec<String>,
+) -> Result<(), anyhow::Error> {
+    let mut rows_event = write_rows_event.rows(&table_map_event);
+    // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
+    let mut column_names = vec![];
+    let mut column_values = vec![];
+    let db_name = table_map_event.database_name();
+    let table_name = table_map_event.table_name();
+    while let Some(item) = rows_event.next() {
+        match item {
+            Ok((row1, row2)) => match (row1, row2) {
+                (None, Some(mut r2)) => {
+                    let columns = r2.columns();
+                    for (index, item) in columns.iter().enumerate() {
+                        column_names.push(column_list[index].clone());
+
+                        let value = r2.take(index);
+                        if let Some(v) = value {
+                            match v {
+                                BinlogValue::Value(v) => match v {
+                                    Value::Int(i) => {
+                                        column_values.push(format!("{}", i));
+                                    }
+                                    Value::Bytes(s) => {
+                                        column_values
+                                            .push(format!("\"{}\"", String::from_utf8_lossy(&s)));
+                                    }
+                                    Value::Double(v) => {
+                                        column_values.push("NULL".to_string());
+                                    }
+                                    Value::Float(v) => {}
+                                    Value::UInt(v) => {
+                                        column_values.push(format!("{}", v));
+                                    }
+                                    Value::NULL => {
+                                        column_values.push("NULL".to_string());
+                                    }
+                                    _ => {}
+                                },
+                                BinlogValue::Jsonb(aaa) => {
+                                    println!("jsonb: {:?}", aaa);
+                                }
+                                BinlogValue::JsonDiff(ss) => {
+                                    println!("jsondiff: {:?}", ss);
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Err(e) => {
+                // Handle the error case
+                println!("An error occurred: {:?}", e);
+            }
+        }
     }
-    let mut hash_vec: Vec<_> = hashmap.iter().collect();
-    hash_vec.sort_by(|a, b| a.1.cmp(b.1));
-    if (*hash_vec[0].1) == 3 && (*hash_vec[1].1) == 4 && (*hash_vec[2].1) == 5 {
-        return Ok(1);
-    }
-    //print the hash_vec
-    // for item in hash_vec {
-    //     print!("{}: {}", item.0, item.1);
-    // }
-    // println!();
-    Ok(0)
+    let res = format!(
+        "INSERT INTO `{}`.`{}`({}) VALUES ({});",
+        db_name,
+        table_name,
+        column_names.join(" , "),
+        column_values.join(" , ")
+    );
+    println!("{}", res);
+    Ok(())
 }
