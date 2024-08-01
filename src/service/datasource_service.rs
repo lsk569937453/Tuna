@@ -1,4 +1,4 @@
-use crate::dao::datasource::DataSource;
+use crate::dao::datasource_dao::DataSourceDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::create_datasource_req;
@@ -27,7 +27,7 @@ async fn create_datasource_with_error(
     let host = options.get_host();
     let port = options.get_port();
 
-    DataSource::create(
+    DataSourceDao::create(
         &pool,
         create_datasource_req.datasource_name,
         create_datasource_req.datasource_url,
@@ -45,7 +45,7 @@ pub async fn get_datasource_list(State(state): State<Pool<MySql>>) -> Result<Res
     handle_response!(get_datasource_list_with_error(state).await)
 }
 async fn get_datasource_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<GetDatasourceListResponse> = DataSource::fetch_all_datasources(&pool)
+    let res: Vec<GetDatasourceListResponse> = DataSourceDao::fetch_all_datasources(&pool)
         .await?
         .into_iter()
         .map(|item| {

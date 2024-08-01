@@ -16,6 +16,7 @@ use service::database_service::get_database_list;
 use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
 mod dao;
+use service::table_service::get_table_list;
 use tracing_subscriber::fmt::Layer as FmtLayer;
 
 use crate::common::init::init_with_error;
@@ -78,7 +79,7 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
     let console_layer = FmtLayer::new()
         .with_target(true)
         .with_ansi(true)
-        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+        .with_filter(tracing_subscriber::filter::LevelFilter::TRACE);
     tracing_subscriber::registry()
         .with(file_layer)
         .with(console_layer)
@@ -101,7 +102,8 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
             "/datasource",
             post(create_datasource).get(get_datasource_list),
         )
-        .route("/database/:id", get(get_database_list))
+        .route("/datasource/:id/database/:name/tables", get(get_table_list))
+        .route("/datasource/:id", get(get_database_list))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
