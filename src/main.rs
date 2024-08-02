@@ -10,6 +10,7 @@ use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
 mod dao;
 use service::table_service::get_table_list;
+use tokio::time::{sleep, Sleep};
 use tracing_subscriber::fmt::Layer as FmtLayer;
 
 use crate::common::init::init_with_error;
@@ -85,7 +86,7 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
 }
 #[tokio::main]
 async fn main() {
-    if let Err(e) = main_with_error().await {
+    if let Err(e) = test_binlog_with_realtime().await {
         println!("{:?}", e);
     }
 }
@@ -125,6 +126,7 @@ async fn parse_colomns(database: String, table_name: String) -> Result<Vec<Strin
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
 use mysql_common::binlog::events::EventData;
+use std::time::Duration;
 async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     let cache: Cache<String, Vec<String>> = Cache::new(10_000);
     println!("a");
@@ -142,10 +144,13 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
         .await?;
     println!("a1");
 
-    let mut count = 0;
-    println!("a12");
+    let mut bin_log_name = "".to_string();
+    let mut bin_log_position = 0;
 
     while let Some(Ok(data)) = stream.next().await {
+        // println!("header>>>:{:?}", data);
+        bin_log_position = data.header().log_pos();
+
         let event_data = data.read_data()?.ok_or(anyhow!("sssss"))?;
 
         match event_data {
@@ -184,21 +189,25 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 // println!("{:?}", gtid_event);
                 let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
                 println!(
-                    "gtid:=============================={}:{}",
+                    "{}-{}-gtid:=============================={}:{}",
+                    bin_log_name,
+                    bin_log_position,
                     gtid.to_string(),
                     gtid_event.gno()
                 );
             }
             EventData::XidEvent(e) => {
-                println!("COMMIT;");
+                println!("{}-{}-COMMIT;", bin_log_name, bin_log_position);
+            }
+            EventData::RotateEvent(rotate_event) => {
+                bin_log_name = rotate_event.name().to_string();
+                println!("rotate_event>>>{:?}", rotate_event);
             }
             _ => {
-                // println!("{:?}", event_data);
+                // println!("other>>>{:?}", event_data);
             }
         }
-        // if count % 10 == 0 {
-        //     println!("count is :{}", count);
-        // }
+        // sleep(Duration::from_millis(1000)).await;
     }
     Ok(())
 }
