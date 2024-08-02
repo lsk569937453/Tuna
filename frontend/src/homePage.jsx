@@ -70,7 +70,7 @@ function HomePage() {
                                     </Sidebar.Item>
                                 </Link>
 
-                                <Link to="/strategyPage" >
+                                <Link to="/datasourcePage" >
                                     <Sidebar.Item icon={HiChip} >
                                         数据源管理
                                     </Sidebar.Item>

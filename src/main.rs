@@ -85,7 +85,7 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
 }
 #[tokio::main]
 async fn main() {
-    if let Err(e) = test_binlog_with_realtime().await {
+    if let Err(e) = main_with_error().await {
         println!("{:?}", e);
     }
 }

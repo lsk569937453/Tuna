@@ -16,7 +16,7 @@ Request.interceptors.response.use((config) => {
     return config
 }, (error) => {
     const { response } = error;
-    errorHandle(response.status, response.data.msg);
+    errorHandle(response.status, response.data);
 
     return Promise.reject(error);
 }
