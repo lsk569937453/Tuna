@@ -10,6 +10,7 @@ use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
 mod dao;
 use service::table_service::get_table_list;
+use time::format_description;
 use tokio::time::{sleep, Sleep};
 use tracing_subscriber::fmt::Layer as FmtLayer;
 
@@ -125,6 +126,7 @@ async fn parse_colomns(database: String, table_name: String) -> Result<Vec<Strin
 
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
+use mysql_common::binlog::consts::EventFlags;
 use mysql_common::binlog::events::EventData;
 use std::time::Duration;
 async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
@@ -147,15 +149,23 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     let mut bin_log_name = "".to_string();
     let mut bin_log_position = 0;
 
-    while let Some(Ok(data)) = stream.next().await {
-        // println!("header>>>:{:?}", data);
-        bin_log_position = data.header().log_pos();
+    while let Some(Ok(event)) = stream.next().await {
+        let event_flags = event.header().flags();
+        if event_flags.contains(EventFlags::LOG_EVENT_IGNORABLE_F) {
+            continue;
+        }
+        // println!("event is :{:?}", event);
+        bin_log_position = event.header().log_pos();
 
-        let event_data = data.read_data()?.ok_or(anyhow!("sssss"))?;
+        let event_data = event.read_data()?.ok_or(anyhow!("Read data error"))?;
 
         match event_data {
-            EventData::QueryEvent(query) => {
-                println!("{}", String::from_utf8_lossy(query.query_raw()));
+            EventData::QueryEvent(query_event) => {
+                println!(
+                    "QueryEvent:{},source:{:?}",
+                    String::from_utf8_lossy(query_event.query_raw()),
+                    event
+                );
             }
             EventData::TableMapEvent(table_map_event) => {
                 let db_name = table_map_event.database_name();
@@ -186,7 +196,6 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 }
             }
             EventData::GtidEvent(gtid_event) => {
-                // println!("{:?}", gtid_event);
                 let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
                 println!(
                     "{}-{}-gtid:=============================={}:{}",
@@ -203,11 +212,12 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 bin_log_name = rotate_event.name().to_string();
                 println!("rotate_event>>>{:?}", rotate_event);
             }
+            EventData::FormatDescriptionEvent(format_description_event) => {}
             _ => {
-                // println!("other>>>{:?}", event_data);
+                println!("other>>>>>{:?}", event);
             }
         }
-        // sleep(Duration::from_millis(1000)).await;
+        sleep(Duration::from_millis(1000)).await;
     }
     Ok(())
 }
