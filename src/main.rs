@@ -77,7 +77,7 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
     let console_layer = FmtLayer::new()
         .with_target(true)
         .with_ansi(true)
-        .with_filter(tracing_subscriber::filter::LevelFilter::TRACE);
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
     tracing_subscriber::registry()
         .with(file_layer)
         .with(console_layer)
@@ -128,8 +128,11 @@ use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
 use mysql_common::binlog::consts::EventFlags;
 use mysql_common::binlog::events::EventData;
+use std::cell::RefCell;
 use std::time::Duration;
 async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
+    let _work_guard = setup_logger()?;
+
     let cache: Cache<String, Vec<String>> = Cache::new(10_000);
     println!("a");
     let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
@@ -139,7 +142,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     // let e = input.parse::<Sid>().unwrap_err();
     let mut stream = mysql
         .get_binlog_stream(
-            mysql_async::BinlogStreamRequest::new(11114)
+            mysql_async::BinlogStreamRequest::new(11)
                 .with_gtid()
                 .with_gtid_set(vec![]),
         )
@@ -148,39 +151,32 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
 
     let mut bin_log_name = "".to_string();
     let mut bin_log_position = 0;
-
+    let mut current_table_map_event: Option<TableMapEvent> = None;
+    let mut column_list = None;
     while let Some(Ok(event)) = stream.next().await {
-        let event_flags = event.header().flags();
-        if event_flags.contains(EventFlags::LOG_EVENT_IGNORABLE_F) {
-            continue;
-        }
-        // println!("event is :{:?}", event);
+        // let event_flags = event.header().flags();
+        // if event_flags.contains(EventFlags::LOG_EVENT_IGNORABLE_F) {
+        //     continue;
+        // }
         bin_log_position = event.header().log_pos();
+        let event_cloned = event.clone();
+        let option_event_data = event_cloned.read_data()?;
+        let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
+        let dst = event_data.clone();
+        // println!("event is :{:?}", event_data);
 
-        let event_data = event.read_data()?.ok_or(anyhow!("Read data error"))?;
-
-        match event_data {
-            EventData::QueryEvent(query_event) => {
-                println!(
-                    "QueryEvent:{},source:{:?}",
-                    String::from_utf8_lossy(query_event.query_raw()),
-                    event
-                );
-            }
+        match dst {
             EventData::TableMapEvent(table_map_event) => {
                 let db_name = table_map_event.database_name();
                 let table_name = table_map_event.table_name();
-                if db_name == "mysql"
-                    || db_name == "performance_schema"
-                    || db_name == "information_schema"
-                    || db_name == "sys"
-                {
+                let key = format!("{}{}", db_name, table_name);
+                if db_name != "mydb" {
+                    println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
                     continue;
                 }
-                let key = format!("{}{}", db_name, table_name);
                 let s = cache.get(&key).await;
 
-                let column_list = if s.is_none() {
+                let current_column_list = if s.is_none() {
                     let v =
                         parse_colomns(db_name.to_string().clone(), table_name.to_string().clone())
                             .await?;
@@ -189,12 +185,31 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 } else {
                     s.unwrap()
                 };
-                if let Some(Ok(new_data)) = stream.next().await {
-                    let new_event_data = new_data.read_data()?.ok_or(anyhow!("sssss"))?;
-
-                    parse_sql_with_error(new_event_data, table_map_event, column_list).await?;
-                }
+                column_list = Some(current_column_list);
+                current_table_map_event = Some(table_map_event.into_owned());
             }
+            EventData::RowsEvent(rows_event_data) => {
+                if !should_skip(current_table_map_event.clone()) {
+                    continue;
+                }
+                let table_map_eventt = current_table_map_event.clone();
+                let data = table_map_eventt.ok_or(anyhow!(""))?;
+                let column_list = column_list.clone().ok_or(anyhow!(""))?;
+                parse_sql_with_error(rows_event_data, data.clone(), column_list).await?;
+            }
+            EventData::QueryEvent(query_event) => {
+                println!(
+                    "QueryEvent:{},",
+                    String::from_utf8_lossy(query_event.query_raw()),
+                );
+            }
+            EventData::RowsQueryEvent(rows_query_event) => {
+                println!("{:?}", rows_query_event);
+            }
+            EventData::TransactionPayloadEvent(transaction_payload_event) => {
+                println!("{:?}", transaction_payload_event);
+            }
+
             EventData::GtidEvent(gtid_event) => {
                 let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
                 println!(
@@ -212,38 +227,47 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 bin_log_name = rotate_event.name().to_string();
                 println!("rotate_event>>>{:?}", rotate_event);
             }
-            EventData::FormatDescriptionEvent(format_description_event) => {}
             _ => {
-                println!("other>>>>>{:?}", event);
+                info!("other>>>>>{:?}", event_data);
             }
         }
-        sleep(Duration::from_millis(1000)).await;
+        sleep(Duration::from_millis(100)).await;
     }
     Ok(())
 }
+
+fn should_skip(current_table_map_event: Option<TableMapEvent>) -> bool {
+    if let Some(current_map_event) = current_table_map_event.clone() {
+        let db_name = current_map_event.database_name();
+        if db_name == "mydb" {
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
 async fn parse_sql_with_error(
-    data: EventData<'_>,
+    rows_event_data: RowsEventData<'_>,
     table_map_event: TableMapEvent<'_>,
     column_list: Vec<String>,
     // db_name: String,
     // table_name: String,
 ) -> Result<(), anyhow::Error> {
-    match data {
-        EventData::RowsEvent(rows_event_data) => match rows_event_data {
-            RowsEventData::WriteRowsEvent(write_rows_event) => {
-                parse_insert_sql(write_rows_event, table_map_event, column_list).await?;
-            }
-            RowsEventData::UpdateRowsEvent(update_rows_event) => {
-                println!("update_rows_event: {:?}", update_rows_event);
-            }
-            RowsEventData::DeleteRowsEvent(delete_rows_event) => {
-                println!("delete_rows_event: {:?}", delete_rows_event);
-            }
-            _ => {}
-        },
-
+    match rows_event_data {
+        RowsEventData::WriteRowsEvent(write_rows_event) => {
+            parse_insert_sql(write_rows_event, table_map_event, column_list).await?;
+        }
+        RowsEventData::UpdateRowsEvent(update_rows_event) => {
+            println!("update_rows_event: {:?}", update_rows_event);
+        }
+        RowsEventData::DeleteRowsEvent(delete_rows_event) => {
+            println!("delete_rows_event: {:?}", delete_rows_event);
+        }
         _ => {}
     }
+
     Ok(())
 }
 async fn parse_insert_sql(
