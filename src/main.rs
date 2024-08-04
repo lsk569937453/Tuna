@@ -2,7 +2,9 @@ use anyhow::anyhow;
 
 use futures::StreamExt;
 use moka::future::Cache;
-use mysql_async::binlog::events::{RowsEventData, TableMapEvent, WriteRowsEvent};
+use mysql_async::binlog::events::{
+    RowsEvent, RowsEventData, RowsEventRows, TableMapEvent, WriteRowsEvent,
+};
 use mysql_async::binlog::value::BinlogValue;
 use mysql_common::proto::MySerialize;
 use service::database_service::get_database_list;
@@ -171,11 +173,12 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 let table_name = table_map_event.table_name();
                 let key = format!("{}{}", db_name, table_name);
                 if db_name != "mydb" {
-                    println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
+                    // println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
                     continue;
                 }
                 let s = cache.get(&key).await;
 
+                //可能查询很多次
                 let current_column_list = if s.is_none() {
                     let v =
                         parse_colomns(db_name.to_string().clone(), table_name.to_string().clone())
@@ -189,7 +192,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 current_table_map_event = Some(table_map_event.into_owned());
             }
             EventData::RowsEvent(rows_event_data) => {
-                if !should_skip(current_table_map_event.clone()) {
+                if !should_save(current_table_map_event.clone()) {
                     continue;
                 }
                 let table_map_eventt = current_table_map_event.clone();
@@ -199,7 +202,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
             }
             EventData::QueryEvent(query_event) => {
                 println!(
-                    "QueryEvent:{},",
+                    "QueryEvent:{}",
                     String::from_utf8_lossy(query_event.query_raw()),
                 );
             }
@@ -236,7 +239,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn should_skip(current_table_map_event: Option<TableMapEvent>) -> bool {
+fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
     if let Some(current_map_event) = current_table_map_event.clone() {
         let db_name = current_map_event.database_name();
         if db_name == "mydb" {
@@ -255,15 +258,21 @@ async fn parse_sql_with_error(
     // db_name: String,
     // table_name: String,
 ) -> Result<(), anyhow::Error> {
+    let db_name = table_map_event.database_name().to_string();
+    let table_name = table_map_event.table_name().to_string();
     match rows_event_data {
         RowsEventData::WriteRowsEvent(write_rows_event) => {
-            parse_insert_sql(write_rows_event, table_map_event, column_list).await?;
+            let rows_event = write_rows_event.rows(&table_map_event);
+            let (column_names, column_values) =
+                parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
         }
         RowsEventData::UpdateRowsEvent(update_rows_event) => {
-            println!("update_rows_event: {:?}", update_rows_event);
+            let rows_event = update_rows_event.rows(&table_map_event);
+            parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
         }
         RowsEventData::DeleteRowsEvent(delete_rows_event) => {
-            println!("delete_rows_event: {:?}", delete_rows_event);
+            let rows_event = delete_rows_event.rows(&table_map_event);
+            parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
         }
         _ => {}
     }
@@ -271,16 +280,15 @@ async fn parse_sql_with_error(
     Ok(())
 }
 async fn parse_insert_sql(
-    write_rows_event: WriteRowsEvent<'_>,
-    table_map_event: TableMapEvent<'_>,
+    mut rows_event: RowsEventRows<'_>,
+    db_name: String,
+    table_name: String,
     column_list: Vec<String>,
-) -> Result<(), anyhow::Error> {
-    let mut rows_event = write_rows_event.rows(&table_map_event);
+) -> Result<(String, String), anyhow::Error> {
     // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
     let mut column_names = vec![];
     let mut column_values = vec![];
-    let db_name = table_map_event.database_name();
-    let table_name = table_map_event.table_name();
+    let mut res = "".to_string();
     while let Some(item) = rows_event.next() {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
@@ -322,6 +330,13 @@ async fn parse_insert_sql(
                         }
                     }
                 }
+                (Some(r1), Some(r2)) => {
+                    println!("r1:{:?},r2:{:?}", r1, r2);
+                }
+                (Some(r1), None) => {
+                    println!("r1:{:?},", r1);
+                }
+
                 _ => {}
             },
             Err(e) => {
@@ -330,7 +345,7 @@ async fn parse_insert_sql(
             }
         }
     }
-    let res = format!(
+    res = format!(
         "INSERT INTO `{}`.`{}`({}) VALUES ({});",
         db_name,
         table_name,
@@ -338,5 +353,5 @@ async fn parse_insert_sql(
         column_values.join(" , ")
     );
     println!("{}", res);
-    Ok(())
+    Ok((column_names.join(","), column_values.join(" , ")))
 }
