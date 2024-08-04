@@ -3,6 +3,7 @@ import { Sidebar, Button, Dropdown } from "flowbite-react";
 import { HiArrowSmRight, HiChartPie, HiInbox, HiShoppingBag, HiChip, HiUser, HiViewBoards, HiOutlineLogout, HiLogout } from "react-icons/hi";
 import Dashboard from "./dashboard";
 import DatasourcePage from "./datasourcePage";
+import TaskPage from "./taskPage";
 import { Routes, Route, Outlet, Link, Navigate } from 'react-router-dom';
 import { useState, useEffect } from "react"
 import moment from 'moment';
@@ -63,7 +64,7 @@ function HomePage() {
                                         表盘
                                     </Sidebar.Item>
                                 </Link>
-                                <Link to="/datasourcePage" >
+                                <Link to="/taskPage" >
 
                                     <Sidebar.Item icon={HiViewBoards} labelColor="dark" >
                                         任务管理
@@ -90,6 +91,7 @@ function HomePage() {
                             <Route path="dashboard" element={<Dashboard />} />
                             <Route path="datasourcePage" element={<DatasourcePage />} />
 
+                            <Route path="taskPage" element={<TaskPage />} />
 
 
                         </Route>

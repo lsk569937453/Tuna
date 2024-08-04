@@ -11,7 +11,7 @@ import { ToastContainer, toast } from 'react-toastify';
 
 const pageSize = 5;
 
-function DatasourcePage() {
+function TaskPage() {
 
     const [openModal, setOpenModal] = useState(false);
     const [datasourceName, setDatasourceName] = useState("");
@@ -80,7 +80,7 @@ function DatasourcePage() {
             <div className="p-4 flex-col">
                 <div className="mb-4 flex justify-center">
 
-                    <Button onClick={() => setOpenModal(true)}>添加数据源</Button>
+                    <Button onClick={() => setOpenModal(true)}>添加任务</Button>
                     <ToastContainer />
 
                     <Modal dismissible show={openModal} onClose={() => setOpenModal(false)} >
@@ -94,7 +94,7 @@ function DatasourcePage() {
                             </div>
                             <div className="flex items-center   w-full">
                                 <span className="mr-2 basis-1/3 text-right	">数据源地址:</span>
-                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址:" required
+                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
                                     onChange={(e) => setDatasourceUrl(e.target.value)}
                                     value={datasourceUrl}
 
@@ -115,7 +115,7 @@ function DatasourcePage() {
                 </div>
                 <Table>
                     <Table.Head>
-                        <Table.HeadCell className="font-bold text-center text-xl">数据源名称</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">任务名称</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">数据源地址</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">操作</Table.HeadCell>
                     </Table.Head>
@@ -142,4 +142,4 @@ function DatasourcePage() {
         </div >
     );
 }
-export default DatasourcePage;
+export default TaskPage;
