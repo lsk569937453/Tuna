@@ -89,7 +89,7 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
 }
 #[tokio::main]
 async fn main() {
-    if let Err(e) = main_with_error().await {
+    if let Err(e) = test_binlog_with_realtime().await {
         println!("{:?}", e);
     }
 }
@@ -126,6 +126,7 @@ async fn parse_colomns(database: String, table_name: String) -> Result<Vec<Strin
     Ok(res)
 }
 
+use mysql_async::binlog::events::UpdateRowsEvent;
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
 use mysql_common::binlog::consts::EventFlags;
@@ -268,11 +269,11 @@ async fn parse_sql_with_error(
         }
         RowsEventData::UpdateRowsEvent(update_rows_event) => {
             let rows_event = update_rows_event.rows(&table_map_event);
-            parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
+            parse_update_sql(rows_event, db_name, table_name, column_list).await?;
         }
         RowsEventData::DeleteRowsEvent(delete_rows_event) => {
             let rows_event = delete_rows_event.rows(&table_map_event);
-            parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
+            parse_delete_sql(rows_event, db_name, table_name, column_list).await?;
         }
         _ => {}
     }
@@ -351,6 +352,171 @@ async fn parse_insert_sql(
         table_name,
         column_names.join(" , "),
         column_values.join(" , ")
+    );
+    println!("{}", res);
+    Ok((column_names.join(","), column_values.join(" , ")))
+}
+async fn parse_update_sql(
+    mut rows_event: RowsEventRows<'_>,
+    db_name: String,
+    table_name: String,
+    column_list: Vec<String>,
+) -> Result<(), anyhow::Error> {
+    // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
+    let mut before_values = vec![];
+    let mut after_values = vec![];
+    let mut column_names = vec![];
+
+    let mut res = "".to_string();
+    while let Some(item) = rows_event.next() {
+        match item {
+            Ok((row1, row2)) => match (row1, row2) {
+                (Some(mut r1), Some(mut r2)) => {
+                    let columns = r2.columns();
+                    for (index, item) in columns.iter().enumerate() {
+                        column_names.push(column_list[index].clone());
+                        let before_value = r1.take(index);
+
+                        let after_value = r2.take(index);
+                        if let (Some(before_value), Some(after_value)) = (before_value, after_value)
+                        {
+                            match (before_value, after_value) {
+                                (
+                                    BinlogValue::Value(Value::Int(before_i)),
+                                    BinlogValue::Value(Value::Int(after_i)),
+                                ) => {
+                                    let before_value =
+                                        format!(r#"{}={}"#, column_list[index], before_i);
+                                    let after_value =
+                                        format!(r#"{}={}"#, column_list[index], after_i);
+                                    before_values.push(before_value);
+                                    after_values.push(after_value);
+                                }
+                                (
+                                    BinlogValue::Value(Value::Bytes(before_i)),
+                                    BinlogValue::Value(Value::Bytes(after_i)),
+                                ) => {
+                                    let before_value = format!(
+                                        r#"{}={}"#,
+                                        column_list[index],
+                                        String::from_utf8_lossy(&before_i)
+                                    );
+                                    let after_value = format!(
+                                        r#"{}="{}""#,
+                                        column_list[index],
+                                        String::from_utf8_lossy(&after_i)
+                                    );
+                                    before_values.push(before_value);
+                                    after_values.push(after_value);
+                                }
+                                (
+                                    BinlogValue::Value(Value::Double(before_i)),
+                                    BinlogValue::Value(Value::Double(after_i)),
+                                ) => {}
+                                (
+                                    BinlogValue::Value(Value::UInt(before_i)),
+                                    BinlogValue::Value(Value::UInt(after_i)),
+                                ) => {}
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
+                (Some(r1), None) => {
+                    println!("r1:{:?},", r1);
+                }
+
+                _ => {}
+            },
+            Err(e) => {
+                // Handle the error case
+                println!("An error occurred: {:?}", e);
+            }
+        }
+    }
+    res = format!(
+        "UPDATE `{}`.`{}` SET {} WHERE {} LIMIT 1;",
+        db_name,
+        table_name,
+        before_values.join(" , "),
+        after_values.join(" AND  ")
+    );
+    println!("{}", res);
+    Ok(())
+}
+async fn parse_delete_sql(
+    mut rows_event: RowsEventRows<'_>,
+    db_name: String,
+    table_name: String,
+    column_list: Vec<String>,
+) -> Result<(String, String), anyhow::Error> {
+    // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
+    let mut column_names = vec![];
+    let mut column_values = vec![];
+    let mut res = "".to_string();
+    while let Some(item) = rows_event.next() {
+        match item {
+            Ok((row1, row2)) => match (row1, row2) {
+                (Some(mut r1), None) => {
+                    let columns = r1.columns();
+                    for (index, item) in columns.iter().enumerate() {
+                        column_names.push(column_list[index].clone());
+
+                        let value = r1.take(index);
+                        if let Some(v) = value {
+                            match v {
+                                BinlogValue::Value(v) => match v {
+                                    Value::Int(i) => {
+                                        let current = format!(r#"{}={}"#, column_list[index], i);
+                                        column_values.push(current);
+                                    }
+                                    Value::Bytes(s) => {
+                                        let value = String::from_utf8_lossy(&s);
+                                        let current =
+                                            format!(r#"{}="{}""#, column_list[index], value);
+                                        column_values.push(current);
+                                    }
+                                    Value::Double(v) => {
+                                        // column_values.push("NULL".to_string());
+                                    }
+                                    Value::Float(v) => {}
+                                    Value::UInt(v) => {
+                                        // column_values.push(format!("{}", v));
+                                    }
+                                    Value::NULL => {}
+                                    _ => {}
+                                },
+                                BinlogValue::Jsonb(aaa) => {
+                                    println!("jsonb: {:?}", aaa);
+                                }
+                                BinlogValue::JsonDiff(ss) => {
+                                    println!("jsondiff: {:?}", ss);
+                                }
+                            }
+                        }
+                    }
+                }
+                (Some(r1), Some(r2)) => {
+                    println!("r1:{:?},r2:{:?}", r1, r2);
+                }
+                (Some(r1), None) => {
+                    println!("r1:{:?},", r1);
+                }
+
+                _ => {}
+            },
+            Err(e) => {
+                // Handle the error case
+                println!("An error occurred: {:?}", e);
+            }
+        }
+    }
+    res = format!(
+        "DELETE FROM `{}`.`{}` WHERE {} LIMIT 1;",
+        db_name,
+        table_name,
+        column_values.join(" AND "),
     );
     println!("{}", res);
     Ok((column_names.join(","), column_values.join(" , ")))
