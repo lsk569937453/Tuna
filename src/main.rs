@@ -12,6 +12,7 @@ use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
 mod dao;
 use service::table_service::get_table_list;
+use service::task_servivce::create_task;
 use time::format_description;
 use tokio::time::{sleep, Sleep};
 use tracing_subscriber::fmt::Layer as FmtLayer;
@@ -104,6 +105,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
         )
         .route("/datasource/:id/database/:name/tables", get(get_table_list))
         .route("/datasource/:id", get(get_database_list))
+        .route("task", post(create_task))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();

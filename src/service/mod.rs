@@ -1,6 +1,7 @@
 pub mod database_service;
 pub mod datasource_service;
 pub mod table_service;
+pub mod task_servivce;
 pub mod vessl_service;
 #[macro_export]
 macro_rules! handle_response {
