@@ -1,3 +1,4 @@
+use crate::util;
 use serde::Serialize;
 use sqlx::mysql::MySqlPool;
 use sqlx::types::chrono::DateTime;
@@ -6,7 +7,7 @@ use sqlx::Error;
 use sqlx::FromRow;
 
 use crate::vojo::create_task_req::CreateTaskReq;
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Serialize)]
 pub struct TaskDao {
     pub id: i32,
     pub task_name: String,
@@ -20,6 +21,7 @@ pub struct TaskDao {
     pub worker_ip: String,
     pub binlog_name: String,
     pub offset: String,
+    #[serde(with = "util")]
     pub timestamp: DateTime<Utc>,
 }
 
@@ -80,7 +82,13 @@ impl TaskDao {
 
         Ok(task)
     }
+    pub async fn fetch_all_datasources(pool: &MySqlPool) -> Result<Vec<TaskDao>, Error> {
+        let datasources = sqlx::query_as!(TaskDao, "SELECT * FROM task")
+            .fetch_all(pool)
+            .await?;
 
+        Ok(datasources)
+    }
     pub async fn update_task(pool: &MySqlPool, task: &TaskDao) -> Result<(), anyhow::Error> {
         sqlx::query!(
             r#"
