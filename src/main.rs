@@ -1,23 +1,23 @@
 use anyhow::anyhow;
 
+use common::init_redis;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::{
     RowsEvent, RowsEventData, RowsEventRows, TableMapEvent, WriteRowsEvent,
 };
 use mysql_async::binlog::value::BinlogValue;
-use mysql_common::proto::MySerialize;
+use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::database_service::get_database_list;
 use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
 mod dao;
 use service::table_service::get_table_list;
 use service::task_servivce::{create_task, get_task_list};
-use time::format_description;
-use tokio::time::{sleep, Sleep};
 use tracing_subscriber::fmt::Layer as FmtLayer;
 
 use crate::common::init::init_with_error;
+mod schedule;
 mod service;
 use tracing_subscriber::Layer;
 mod util;
@@ -31,6 +31,7 @@ use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
 use std::io::{Read, Write};
 
+use crate::init_redis::init_redis;
 use sqlx::{any, Connection, Row};
 use std::{collections::HashMap, hash::Hash, vec};
 use tracing_appender::non_blocking::NonBlockingBuilder;
@@ -79,6 +80,8 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
     let console_layer = FmtLayer::new()
         .with_target(true)
+        .with_line_number(true)
+        .with_file(true)
         .with_ansi(true)
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
     tracing_subscriber::registry()
@@ -98,6 +101,14 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     let _work_guard = setup_logger()?;
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
+    let cloned_db_pool = db_pool.clone();
+    let (redis_client, lock_manager) = init_redis().await?;
+    tokio::spawn(async move {
+        record_error!(
+            main_sync_redis_loop_with_error(redis_client, cloned_db_pool, lock_manager).await
+        );
+    });
+
     let app = Router::new()
         .route(
             "/datasource",
@@ -141,7 +152,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     let cache: Cache<String, Vec<String>> = Cache::new(10_000);
     println!("a");
     let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
-    let input = "e914a9a2-4ff6-11ef-9eca-0242ac130002:3014";
+    let input = "f8298d9c-5398-11ef-a4ff-0242ac190003:1-1136";
     let sid = input.parse::<Sid>()?;
 
     // let e = input.parse::<Sid>().unwrap_err();
@@ -149,7 +160,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
         .get_binlog_stream(
             mysql_async::BinlogStreamRequest::new(11)
                 .with_gtid()
-                .with_gtid_set(vec![]),
+                .with_gtid_set(vec![sid]),
         )
         .await?;
     println!("a1");
@@ -237,7 +248,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 info!("other>>>>>{:?}", event_data);
             }
         }
-        sleep(Duration::from_millis(100)).await;
+        // sleep(Duration::from_millis(100)).await;
     }
     Ok(())
 }

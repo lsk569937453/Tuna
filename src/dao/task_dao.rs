@@ -15,12 +15,7 @@ pub struct TaskDao {
     pub to_datasource_id: i32,
     pub source_database_name: String,
     pub destination_database_name: String,
-    pub source_table_name: String,
-    pub destination_table_name: String,
-    pub status: i32,
-    pub worker_ip: String,
-    pub binlog_name: String,
-    pub offset: String,
+    pub table_mapping: String,
     #[serde(with = "util")]
     pub timestamp: DateTime<Utc>,
 }
@@ -36,17 +31,15 @@ impl TaskDao {
                 to_datasource_id,
                 source_database_name,
                 destination_database_name,
-                source_table_name,
-                destination_table_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                table_mapping
+            ) VALUES (?, ?, ?, ?, ?, ?)
             "#,
             task.task_name,
             task.from_datasource_id,
             task.to_datasource_id,
             task.source_database_name,
             task.destination_database_name,
-            task.source_table_name,
-            task.destination_table_name,
+            task.table_mapping
         )
         .execute(pool)
         .await?;
@@ -65,12 +58,7 @@ impl TaskDao {
                 to_datasource_id,
                 source_database_name,
                 destination_database_name,
-                source_table_name,
-                destination_table_name,
-                status,
-                worker_ip,
-                binlog_name,
-                offset,
+                table_mapping,
                 timestamp
             FROM task
             WHERE id = ?
@@ -82,12 +70,12 @@ impl TaskDao {
 
         Ok(task)
     }
-    pub async fn fetch_all_datasources(pool: &MySqlPool) -> Result<Vec<TaskDao>, Error> {
-        let datasources = sqlx::query_as!(TaskDao, "SELECT * FROM task")
+    pub async fn fetch_all_tasks(pool: &MySqlPool) -> Result<Vec<TaskDao>, Error> {
+        let tasks = sqlx::query_as!(TaskDao, "SELECT * FROM task")
             .fetch_all(pool)
             .await?;
 
-        Ok(datasources)
+        Ok(tasks)
     }
     pub async fn update_task(pool: &MySqlPool, task: &TaskDao) -> Result<(), anyhow::Error> {
         sqlx::query!(
@@ -98,12 +86,7 @@ impl TaskDao {
                 to_datasource_id = ?,
                 source_database_name = ?,
                 destination_database_name = ?,
-                source_table_name = ?,
-                destination_table_name = ?,
-                status = ?,
-                worker_ip = ?,
-                binlog_name = ?,
-                offset = ?,
+                table_mapping = ?,
                 timestamp = ?
             WHERE id = ?
             "#,
@@ -112,12 +95,7 @@ impl TaskDao {
             task.to_datasource_id,
             task.source_database_name,
             task.destination_database_name,
-            task.source_table_name,
-            task.destination_table_name,
-            task.status,
-            task.worker_ip,
-            task.binlog_name,
-            task.offset,
+            task.table_mapping,
             task.timestamp,
             task.id
         )

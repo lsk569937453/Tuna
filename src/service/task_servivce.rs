@@ -36,7 +36,7 @@ pub async fn get_task_list(State(state): State<Pool<MySql>>) -> Result<Response,
     handle_response!(get_task_list_with_error(state).await)
 }
 async fn get_task_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<TaskDao> = TaskDao::fetch_all_datasources(&pool).await?;
+    let res: Vec<TaskDao> = TaskDao::fetch_all_tasks(&pool).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: res,

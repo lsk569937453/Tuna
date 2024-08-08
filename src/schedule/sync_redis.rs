@@ -1,0 +1,100 @@
+use crate::common::common_constants::REDIS_TASK_INFO;
+use crate::dao::task_dao::TaskDao;
+use crate::record_error;
+use crate::schedule::sync_binlog::sync_binlog_with_error;
+use redis::ExistenceCheck;
+use redis::SetOptions;
+use redis::{cluster::ClusterClient, cluster_async::ClusterConnection, AsyncCommands};
+use redsync::RedisInstance;
+use redsync::Redsync;
+use sqlx::MySql;
+use sqlx::Pool;
+use std::time::Duration;
+use tokio::time::interval;
+
+pub async fn main_sync_redis_loop_with_error(
+    cluster_client: ClusterClient,
+    pool: Pool<MySql>,
+    lock_manager: Redsync<RedisInstance>,
+) -> Result<(), anyhow::Error> {
+    let duration = 5000;
+    let mut interval = interval(Duration::from_millis(duration));
+    info!("start main_loop,interval is {}", duration);
+    let mut cluster_connection = cluster_client.get_async_connection().await?;
+    loop {
+        interval.tick().await;
+        if let Err(e) =
+            sync_task_ids(&mut cluster_connection, pool.clone(), lock_manager.clone()).await
+        {
+            error!("main_sync_redis_loop_with_error error:{:?}", e);
+            continue;
+        }
+    }
+    Ok(())
+}
+//每个任务都会去遍历所有的任务，然后去抢任务执行
+async fn sync_task_ids(
+    cluster_connection: &mut ClusterConnection,
+    pool: Pool<MySql>,
+    lock_manager: Redsync<RedisInstance>,
+) -> Result<(), anyhow::Error> {
+    let tasks = TaskDao::fetch_all_tasks(&pool).await?;
+    for task in tasks {
+        let cloned_pool = pool.clone();
+        let mut cloned_cluster_connection = cluster_connection.clone();
+        let task_id = task.id;
+        let task_info_key = format!("tuna:task:{}", task_id);
+        let task_info_option: Option<String> = cluster_connection
+            .clone()
+            .get(task_info_key.clone())
+            .await?;
+        if task_info_option == None {
+            let task_lock = format!("tuna:task_lock:{}", task_id);
+            info!(
+                "try to get the task_lock,task_id:{},task_lock is {}",
+                task_id, task_lock
+            );
+            let lock_result = lock_manager
+                .lock(task_lock, Duration::from_millis(3000))
+                .await?;
+            if let Ok(lock) = lock_result {
+                info!(
+                    "get the task_lock success,task_id:{},task_lock is {}",
+                    task_id, task_lock
+                );
+                let set_options = SetOptions::default()
+                    .conditional_set(ExistenceCheck::NX)
+                    .with_expiration(redis::SetExpiry::PX(10000));
+                let operation_result: Result<Option<String>, redis::RedisError> =
+                    cloned_cluster_connection
+                        .set_options(task_info_key, "aaa", set_options)
+                        .await;
+                if let Ok(Some(_)) = operation_result {
+                    info!("set the task_info success,task_id:{}", task_id);
+                    tokio::spawn(async move {
+                        record_error!(
+                            sync_binlog_with_error(
+                                &mut cloned_cluster_connection,
+                                cloned_pool,
+                                cloned_lock_manager,
+                                task_id,
+                            )
+                            .await
+                        );
+                    });
+                } else {
+                    info!("set redis error",)
+                }
+            } else {
+                info!(
+                    "get the task_lock failed,task_id:{},task_lock is {}",
+                    task_id, task_lock
+                );
+                continue;
+            }
+        } else {
+            info!("task_info is not empty,task_id:{}", task_id);
+        }
+    }
+    Ok(())
+}
