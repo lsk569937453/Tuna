@@ -3,9 +3,7 @@ use anyhow::anyhow;
 use common::init_redis;
 use futures::StreamExt;
 use moka::future::Cache;
-use mysql_async::binlog::events::{
-    RowsEvent, RowsEventData, RowsEventRows, TableMapEvent, WriteRowsEvent,
-};
+use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
 use mysql_async::binlog::value::BinlogValue;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::database_service::get_database_list;
@@ -26,14 +24,12 @@ use axum::routing::get;
 use axum::routing::post;
 use axum::Router;
 
-use rand::{seq::IteratorRandom, thread_rng}; // 0.6.1
 use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
-use std::io::{Read, Write};
 
 use crate::init_redis::init_redis;
-use sqlx::{any, Connection, Row};
-use std::{collections::HashMap, hash::Hash, vec};
+use sqlx::{Connection, Row};
+use std::vec;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;

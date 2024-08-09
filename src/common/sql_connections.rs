@@ -1,7 +1,6 @@
-use sqlx::pool;
 use sqlx::{mysql::MySqlPool, mysql::MySqlPoolOptions};
 use std::env;
-use std::str::FromStr;
+
 use std::time::Duration;
 pub async fn create_pool() -> Result<MySqlPool, anyhow::Error> {
     env::set_var("DATABASE_URL", "mysql://root:root@localhost:9306/mydb");

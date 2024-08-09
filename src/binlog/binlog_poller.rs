@@ -1,17 +1,15 @@
-use crate::dao::task_dao::TaskDao;
 use anyhow::anyhow;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::EventData;
 use mysql_async::binlog::events::TableMapEvent;
-use mysql_async::binlog::events::UpdateRowsEvent;
 use mysql_async::binlog::value::BinlogValue;
 use mysql_async::BinlogStream;
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
 use sqlx::Connection;
 
-use mysql_async::binlog::events::{RowsEvent, RowsEventData, RowsEventRows, WriteRowsEvent};
+use mysql_async::binlog::events::{RowsEventData, RowsEventRows};
 
 use sqlx::mysql::MySqlConnection;
 use sqlx::Row;
@@ -41,11 +39,10 @@ impl BinlogPoller {
     pub async fn start() -> Result<Self, anyhow::Error> {
         let datasource = "self.task_dao.from_datasource_id";
         let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
-        let input = "ce9d6204-5530-11ef-a4c8-0242c0a83002:1-3000";
+        let input = "ce9d6204-5530-11ef-a4c8-0242c0a83002:1-6055";
         let sid = input.parse::<Sid>()?;
 
-        // let e = input.parse::<Sid>().unwrap_err();
-        let mut stream = mysql
+        let stream = mysql
             .get_binlog_stream(
                 mysql_async::BinlogStreamRequest::new(11)
                     .with_gtid()
@@ -80,7 +77,6 @@ impl BinlogPoller {
                     let table_name = table_map_event.table_name();
                     let key = format!("{}{}", db_name, table_name);
                     if db_name != "mydb" {
-                        // println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
                         return Ok(());
                     }
                     let s = self.cache.get(&key).await;
@@ -134,7 +130,7 @@ impl BinlogPoller {
                         gtid_event.gno()
                     );
                 }
-                EventData::XidEvent(e) => {
+                EventData::XidEvent(_) => {
                     info!(
                         "{}-{}-COMMIT;",
                         self.current_binlog_name, self.current_binlog_position,
@@ -144,6 +140,8 @@ impl BinlogPoller {
                     self.current_binlog_name = rotate_event.name().to_string();
                     info!("rotate_event>>>{:?}", rotate_event);
                 }
+                EventData::HeartbeatEvent => {}
+                EventData::FormatDescriptionEvent(e) => {}
                 _ => {
                     info!("other>>>>>{:?}", event_data);
                 }

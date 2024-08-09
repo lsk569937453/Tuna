@@ -1,4 +1,3 @@
-use crate::common::common_constants::REDIS_TASK_INFO;
 use crate::dao::task_dao::TaskDao;
 use crate::record_error;
 use crate::schedule::sync_binlog::sync_binlog_with_error;

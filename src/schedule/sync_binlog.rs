@@ -1,7 +1,6 @@
-use crate::common::common_constants::REDIS_TASK_INFO;
 use crate::dao::task_dao::TaskDao;
 use crate::record_error;
-use redis::{cluster::ClusterClient, cluster_async::ClusterConnection, AsyncCommands};
+use redis::{cluster_async::ClusterConnection, AsyncCommands};
 
 use crate::binlog::binlog_poller::BinlogPoller;
 use sqlx::MySql;
