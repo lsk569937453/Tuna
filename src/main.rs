@@ -102,11 +102,9 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
     let cloned_db_pool = db_pool.clone();
-    let (redis_client, lock_manager) = init_redis().await?;
+    let redis_client = init_redis().await?;
     tokio::spawn(async move {
-        record_error!(
-            main_sync_redis_loop_with_error(redis_client, cloned_db_pool, lock_manager).await
-        );
+        record_error!(main_sync_redis_loop_with_error(redis_client, cloned_db_pool).await);
     });
 
     let app = Router::new()
