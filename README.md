@@ -31,3 +31,8 @@ show binlog events;
 
 # 查看具体一个binlog文件的内容 （in 后面为binlog的文件名）
 show binlog events in 'master.000003';
+
+
+#redis-key:
+- 任务列表:     key:tuna:task:task_id  value是状态
+- 任务锁：      key:tuna:task_lock:task_id

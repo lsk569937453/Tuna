@@ -32,18 +32,11 @@ async fn create_task_with_error(
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
-pub async fn get_datasource_list(State(state): State<Pool<MySql>>) -> Result<Response, Infallible> {
-    handle_response!(get_datasource_list_with_error(state).await)
+pub async fn get_task_list(State(state): State<Pool<MySql>>) -> Result<Response, Infallible> {
+    handle_response!(get_task_list_with_error(state).await)
 }
-async fn get_datasource_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<GetDatasourceListResponse> = DataSourceDao::fetch_all_datasources(&pool)
-        .await?
-        .into_iter()
-        .map(|item| {
-            let addr = format!("{}:{}", item.host, item.port);
-            return GetDatasourceListResponse::new(item.datasource_name, addr, item.timestamp);
-        })
-        .collect();
+async fn get_task_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
+    let res: Vec<TaskDao> = TaskDao::fetch_all_tasks(&pool).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: res,

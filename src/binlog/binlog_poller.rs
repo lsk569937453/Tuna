@@ -1,251 +1,156 @@
 use anyhow::anyhow;
-
-use common::init_redis;
 use futures::StreamExt;
 use moka::future::Cache;
-use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
+use mysql_async::binlog::events::EventData;
+use mysql_async::binlog::events::TableMapEvent;
 use mysql_async::binlog::value::BinlogValue;
-use schedule::sync_redis::main_sync_redis_loop_with_error;
-use service::database_service::get_database_list;
-use service::datasource_service::{create_datasource, get_datasource_list};
-mod common;
-mod dao;
-use service::table_service::get_table_list;
-use service::task_servivce::{create_task, get_task_list};
-use tracing_subscriber::fmt::Layer as FmtLayer;
-mod binlog;
-use crate::common::init::init_with_error;
-mod schedule;
-mod service;
-use tracing_subscriber::Layer;
-mod util;
-mod vojo;
-use axum::routing::get;
-use axum::routing::post;
-use axum::Router;
-
-use sqlx::mysql::MySqlConnection;
-use sqlx::mysql::MySqlPoolOptions;
-
-use crate::init_redis::init_redis;
-use sqlx::{Connection, Row};
-use std::vec;
-use tracing_appender::non_blocking::NonBlockingBuilder;
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-#[macro_use]
-extern crate tracing;
-#[macro_use]
-extern crate anyhow;
-async fn create_data() -> Result<(), anyhow::Error> {
-    let pool = MySqlPoolOptions::new()
-        .max_connections(5)
-        .connect("mysql://root:root@localhost:9306/mydb")
-        .await?;
-
-    for i in 0..1000 {
-        let i_str = i.to_string();
-        let i_next_str = (i + 1).to_string();
-        sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
-            .bind(i_str.clone())
-            .bind(i_str.clone())
-            .bind(i_str.clone())
-            .execute(&pool)
-            .await?;
-        sqlx::query("update user set first_name = ? where username=?")
-            .bind(i_next_str)
-            .bind(i_str.clone())
-            .execute(&pool)
-            .await?;
-        sqlx::query("delete from user").execute(&pool).await?;
-    }
-
-    Ok(())
-}
-fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
-    let app_file = rolling::daily("./logs", "access.log");
-    let (non_blocking_appender, guard) = NonBlockingBuilder::default()
-        .buffered_lines_limit(10)
-        .finish(app_file);
-    let file_layer = tracing_subscriber::fmt::Layer::new()
-        .with_target(true)
-        .with_ansi(false)
-        .with_writer(non_blocking_appender)
-        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
-    let console_layer = FmtLayer::new()
-        .with_target(true)
-        .with_line_number(true)
-        .with_ansi(true)
-        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .with(console_layer)
-        .with(tracing_subscriber::filter::LevelFilter::TRACE)
-        .init();
-    Ok(guard)
-}
-#[tokio::main]
-async fn main() {
-    if let Err(e) = main_with_error().await {
-        println!("{:?}", e);
-    }
-}
-async fn main_with_error() -> Result<(), anyhow::Error> {
-    let _work_guard = setup_logger()?;
-    let db_pool = common::sql_connections::create_pool().await?;
-    init_with_error(db_pool.clone()).await?;
-    let cloned_db_pool = db_pool.clone();
-    let redis_client = init_redis().await?;
-    tokio::spawn(async move {
-        record_error!(main_sync_redis_loop_with_error(redis_client, cloned_db_pool).await);
-    });
-
-    let app = Router::new()
-        .route(
-            "/datasource",
-            post(create_datasource).get(get_datasource_list),
-        )
-        .route("/datasource/:id/database/:name/tables", get(get_table_list))
-        .route("/datasource/:id", get(get_database_list))
-        .route("/task", post(create_task).get(get_task_list))
-        .with_state(db_pool);
-    let final_route = Router::new().nest("/api", app);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
-    axum::serve(listener, final_route).await.unwrap();
-    Ok(())
-}
-async fn parse_colomns(database: String, table_name: String) -> Result<Vec<String>, anyhow::Error> {
-    let mut conn = MySqlConnection::connect("mysql://root:root@localhost:9306").await?;
-    let  rows=sqlx::query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION")
-    .bind(database)
-    .bind(table_name)
-    .fetch_all(&mut conn)
-    .await?;
-    let mut res = vec![];
-    for it in rows.iter() {
-        let item: String = it.get(0);
-        res.push(item);
-    }
-    // println!("res: {:?}", res);
-    Ok(res)
-}
-
-use mysql_async::binlog::events::UpdateRowsEvent;
+use mysql_async::BinlogStream;
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
-use mysql_common::binlog::consts::EventFlags;
-use mysql_common::binlog::events::EventData;
-use std::cell::RefCell;
-use std::time::Duration;
-async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
-    let _work_guard = setup_logger()?;
+use sqlx::Connection;
 
-    let cache: Cache<String, Vec<String>> = Cache::new(10_000);
-    println!("a");
-    let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
-    let input = "f8298d9c-5398-11ef-a4ff-0242ac190003:1-1136";
-    let sid = input.parse::<Sid>()?;
+use mysql_async::binlog::events::{RowsEventData, RowsEventRows};
 
-    // let e = input.parse::<Sid>().unwrap_err();
-    let mut stream = mysql
-        .get_binlog_stream(
-            mysql_async::BinlogStreamRequest::new(11)
-                .with_gtid()
-                .with_gtid_set(vec![sid]),
-        )
-        .await?;
-    println!("a1");
+use sqlx::mysql::MySqlConnection;
+use sqlx::Row;
 
-    let mut bin_log_name = "".to_string();
-    let mut bin_log_position = 0;
-    let mut current_table_map_event: Option<TableMapEvent> = None;
-    let mut column_list = None;
-    while let Some(Ok(event)) = stream.next().await {
-        // let event_flags = event.header().flags();
-        // if event_flags.contains(EventFlags::LOG_EVENT_IGNORABLE_F) {
-        //     continue;
-        // }
-        bin_log_position = event.header().log_pos();
-        let event_cloned = event.clone();
-        let option_event_data = event_cloned.read_data()?;
-        let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
-        let dst = event_data.clone();
-        // println!("event is :{:?}", event_data);
-
-        match dst {
-            EventData::TableMapEvent(table_map_event) => {
-                let db_name = table_map_event.database_name();
-                let table_name = table_map_event.table_name();
-                let key = format!("{}{}", db_name, table_name);
-                if db_name != "mydb" {
-                    // println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
-                    continue;
-                }
-                let s = cache.get(&key).await;
-
-                //可能查询很多次
-                let current_column_list = if s.is_none() {
-                    let v =
-                        parse_colomns(db_name.to_string().clone(), table_name.to_string().clone())
-                            .await?;
-                    cache.insert(db_name.to_string().clone(), v.clone()).await;
-                    v
-                } else {
-                    s.unwrap()
-                };
-                column_list = Some(current_column_list);
-                current_table_map_event = Some(table_map_event.into_owned());
-            }
-            EventData::RowsEvent(rows_event_data) => {
-                if !should_save(current_table_map_event.clone()) {
-                    continue;
-                }
-                let table_map_eventt = current_table_map_event.clone();
-                let data = table_map_eventt.ok_or(anyhow!(""))?;
-                let column_list = column_list.clone().ok_or(anyhow!(""))?;
-                parse_sql_with_error(rows_event_data, data.clone(), column_list).await?;
-            }
-            EventData::QueryEvent(query_event) => {
-                println!(
-                    "QueryEvent:{}",
-                    String::from_utf8_lossy(query_event.query_raw()),
-                );
-            }
-            EventData::RowsQueryEvent(rows_query_event) => {
-                println!("{:?}", rows_query_event);
-            }
-            EventData::TransactionPayloadEvent(transaction_payload_event) => {
-                println!("{:?}", transaction_payload_event);
-            }
-
-            EventData::GtidEvent(gtid_event) => {
-                let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
-                println!(
-                    "{}-{}-gtid:=============================={}:{}",
-                    bin_log_name,
-                    bin_log_position,
-                    gtid.to_string(),
-                    gtid_event.gno()
-                );
-            }
-            EventData::XidEvent(e) => {
-                println!("{}-{}-COMMIT;", bin_log_name, bin_log_position);
-            }
-            EventData::RotateEvent(rotate_event) => {
-                bin_log_name = rotate_event.name().to_string();
-                println!("rotate_event>>>{:?}", rotate_event);
-            }
-            _ => {
-                info!("other>>>>>{:?}", event_data);
-            }
-        }
-        // sleep(Duration::from_millis(100)).await;
-    }
-    Ok(())
+pub struct BinlogPoller {
+    pub gtid_set: Option<String>,
+    binlog_stream: BinlogStream,
+    current_db_name: String,
+    current_binlog_name: String,
+    current_binlog_position: u32,
+    current_table_map_event: Option<TableMapEvent<'static>>,
+    column_list: Option<Vec<String>>,
+    cache: Cache<String, Vec<String>>,
 }
+//impl debug for me
+impl std::fmt::Debug for BinlogPoller {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinlogPoller")
+            .field("gtid_set", &self.gtid_set)
+            .field("current_db_name", &self.current_db_name)
+            .field("current_binlog_name", &self.current_binlog_name)
+            .field("current_binlog_position", &self.current_binlog_position)
+            .finish()
+    }
+}
+impl BinlogPoller {
+    pub async fn start() -> Result<Self, anyhow::Error> {
+        let datasource = "self.task_dao.from_datasource_id";
+        let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
+        let input = "ce9d6204-5530-11ef-a4c8-0242c0a83002:1-6055";
+        let sid = input.parse::<Sid>()?;
 
+        let stream = mysql
+            .get_binlog_stream(
+                mysql_async::BinlogStreamRequest::new(11)
+                    .with_gtid()
+                    .with_gtid_set(vec![sid]),
+            )
+            .await?;
+
+        let sel = Self {
+            gtid_set: None,
+            binlog_stream: stream,
+            current_db_name: String::new(),
+            current_binlog_name: String::new(),
+            current_binlog_position: 0,
+            current_table_map_event: None,
+            column_list: None,
+            cache: Cache::new(1000),
+        };
+        Ok(sel)
+    }
+    #[instrument]
+    pub async fn poll(&mut self) -> Result<(), anyhow::Error> {
+        if let Some(Ok(event)) = self.binlog_stream.next().await {
+            self.current_binlog_position = event.header().log_pos();
+            let event_cloned = event.clone();
+            let option_event_data = event_cloned.read_data()?;
+            let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
+            let dst = event_data.clone();
+
+            match dst {
+                EventData::TableMapEvent(table_map_event) => {
+                    let db_name = table_map_event.database_name();
+                    let table_name = table_map_event.table_name();
+                    let key = format!("{}{}", db_name, table_name);
+                    if db_name != "mydb" {
+                        return Ok(());
+                    }
+                    let s = self.cache.get(&key).await;
+
+                    //可能查询很多次
+                    let current_column_list = if s.is_none() {
+                        let v = parse_colomns(
+                            db_name.to_string().clone(),
+                            table_name.to_string().clone(),
+                        )
+                        .await?;
+                        self.cache
+                            .insert(db_name.to_string().clone(), v.clone())
+                            .await;
+                        v
+                    } else {
+                        s.unwrap()
+                    };
+                    self.column_list = Some(current_column_list);
+                    self.current_table_map_event = Some(table_map_event.into_owned());
+                }
+                EventData::RowsEvent(rows_event_data) => {
+                    if !should_save(self.current_table_map_event.clone()) {
+                        return Ok(());
+                    }
+                    let table_map_eventt = self.current_table_map_event.clone();
+                    let data = table_map_eventt.ok_or(anyhow!(""))?;
+                    let column_list = self.column_list.clone().ok_or(anyhow!(""))?;
+                    parse_sql_with_error(rows_event_data, data.clone(), column_list).await?;
+                }
+                EventData::QueryEvent(query_event) => {
+                    info!(
+                        "QueryEvent:{}",
+                        String::from_utf8_lossy(query_event.query_raw()),
+                    );
+                }
+                EventData::RowsQueryEvent(rows_query_event) => {
+                    info!("{:?}", rows_query_event);
+                }
+                EventData::TransactionPayloadEvent(transaction_payload_event) => {
+                    info!("{:?}", transaction_payload_event);
+                }
+
+                EventData::GtidEvent(gtid_event) => {
+                    let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
+                    info!(
+                        "{}-{}-gtid:=============================={}:{}",
+                        self.current_binlog_name,
+                        self.current_binlog_position,
+                        gtid.to_string(),
+                        gtid_event.gno()
+                    );
+                }
+                EventData::XidEvent(_) => {
+                    info!(
+                        "{}-{}-COMMIT;",
+                        self.current_binlog_name, self.current_binlog_position,
+                    );
+                }
+                EventData::RotateEvent(rotate_event) => {
+                    self.current_binlog_name = rotate_event.name().to_string();
+                    info!("rotate_event>>>{:?}", rotate_event);
+                }
+                EventData::HeartbeatEvent => {}
+                EventData::FormatDescriptionEvent(e) => {}
+                _ => {
+                    info!("other>>>>>{:?}", event_data);
+                }
+            }
+            // sleep(Duration::from_millis(100)).await;
+        }
+        Ok(())
+    }
+}
 fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
     if let Some(current_map_event) = current_table_map_event.clone() {
         let db_name = current_map_event.database_name();
@@ -285,6 +190,21 @@ async fn parse_sql_with_error(
     }
 
     Ok(())
+}
+async fn parse_colomns(database: String, table_name: String) -> Result<Vec<String>, anyhow::Error> {
+    let mut conn = MySqlConnection::connect("mysql://root:root@localhost:9306").await?;
+    let  rows=sqlx::query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION")
+    .bind(database)
+    .bind(table_name)
+    .fetch_all(&mut conn)
+    .await?;
+    let mut res = vec![];
+    for it in rows.iter() {
+        let item: String = it.get(0);
+        res.push(item);
+    }
+    // println!("res: {:?}", res);
+    Ok(res)
 }
 async fn parse_insert_sql(
     mut rows_event: RowsEventRows<'_>,
@@ -328,27 +248,27 @@ async fn parse_insert_sql(
                                     _ => {}
                                 },
                                 BinlogValue::Jsonb(aaa) => {
-                                    println!("jsonb: {:?}", aaa);
+                                    info!("jsonb: {:?}", aaa);
                                 }
                                 BinlogValue::JsonDiff(ss) => {
-                                    println!("jsondiff: {:?}", ss);
+                                    info!("jsondiff: {:?}", ss);
                                 }
                             }
                         }
                     }
                 }
                 (Some(r1), Some(r2)) => {
-                    println!("r1:{:?},r2:{:?}", r1, r2);
+                    info!("r1:{:?},r2:{:?}", r1, r2);
                 }
                 (Some(r1), None) => {
-                    println!("r1:{:?},", r1);
+                    info!("r1:{:?},", r1);
                 }
 
                 _ => {}
             },
             Err(e) => {
                 // Handle the error case
-                println!("An error occurred: {:?}", e);
+                info!("An error occurred: {:?}", e);
             }
         }
     }
@@ -359,7 +279,7 @@ async fn parse_insert_sql(
         column_names.join(" , "),
         column_values.join(" , ")
     );
-    println!("{}", res);
+    info!("{}", res);
     Ok((column_names.join(","), column_values.join(" , ")))
 }
 async fn parse_update_sql(
@@ -448,7 +368,7 @@ async fn parse_update_sql(
         before_values.join(" , "),
         after_values.join(" AND  ")
     );
-    println!("{}", res);
+    info!("{}", res);
     Ok(())
 }
 async fn parse_delete_sql(
@@ -494,20 +414,20 @@ async fn parse_delete_sql(
                                     _ => {}
                                 },
                                 BinlogValue::Jsonb(aaa) => {
-                                    println!("jsonb: {:?}", aaa);
+                                    info!("jsonb: {:?}", aaa);
                                 }
                                 BinlogValue::JsonDiff(ss) => {
-                                    println!("jsondiff: {:?}", ss);
+                                    info!("jsondiff: {:?}", ss);
                                 }
                             }
                         }
                     }
                 }
                 (Some(r1), Some(r2)) => {
-                    println!("r1:{:?},r2:{:?}", r1, r2);
+                    info!("r1:{:?},r2:{:?}", r1, r2);
                 }
                 (Some(r1), None) => {
-                    println!("r1:{:?},", r1);
+                    info!("r1:{:?},", r1);
                 }
 
                 _ => {}
@@ -524,6 +444,6 @@ async fn parse_delete_sql(
         table_name,
         column_values.join(" AND "),
     );
-    println!("{}", res);
+    info!("{}", res);
     Ok((column_names.join(","), column_values.join(" , ")))
 }

@@ -1,9 +1,8 @@
 CREATE TABLE IF NOT EXISTS task_running_info (
     id INT PRIMARY KEY AUTO_INCREMENT,
     task_id VARCHAR(255) NOT NULL,
-    status INT NOT NULL,
+    status INT NOT NULL DEFAULT 0 COMMENT '0: 未开始 1: 运行中 2: 执行成功 3: 执行失败',
     worker_ip VARCHAR(255) NOT NULL,
-    offset
-        VARCHAR(500) NOT NULL,
-        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    current_gtid VARCHAR(255) NOT NULL DEFAULT "",
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
