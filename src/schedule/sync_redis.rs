@@ -40,6 +40,7 @@ async fn sync_task_ids(
     for task in tasks {
         let cloned_pool = pool.clone();
         let mut cloned_cluster_connection = cluster_connection.clone();
+        let cloned_task = task.clone();
         let task_id = task.id;
         let task_info_key = format!("tuna:task:{}", task_id);
         let task_info_option: Option<String> = cluster_connection
@@ -79,7 +80,7 @@ async fn sync_task_ids(
                                 sync_binlog_with_error(
                                     &mut cloned_cluster_connection,
                                     cloned_pool,
-                                    task_id,
+                                    cloned_task,
                                 )
                                 .await
                             );

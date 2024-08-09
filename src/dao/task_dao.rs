@@ -7,7 +7,7 @@ use sqlx::Error;
 use sqlx::FromRow;
 
 use crate::vojo::create_task_req::CreateTaskReq;
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, Clone)]
 pub struct TaskDao {
     pub id: i32,
     pub task_name: String,
