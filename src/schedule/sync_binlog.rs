@@ -15,7 +15,8 @@ pub async fn sync_binlog_with_error(
 ) -> Result<(), anyhow::Error> {
     let duration = 5000;
     let mut interval = interval(Duration::from_millis(duration));
-    let mut binlog_poller = BinlogPoller::start().await?;
+    let mut binlog_poller =
+        BinlogPoller::start(task_dao.clone(), cluster_connection.clone()).await?;
     loop {
         let mut cloned_cluster_connection = cluster_connection.clone();
         tokio::select! {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
@@ -8,5 +10,5 @@ pub struct CreateTaskReq {
 
     pub source_database_name: String,
     pub destination_database_name: String,
-    pub table_mapping: String,
+    pub table_mapping: HashMap<String, String>,
 }

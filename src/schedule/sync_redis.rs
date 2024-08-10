@@ -52,6 +52,7 @@ async fn sync_task_ids(
                 "try to get the task_lock,task_id:{},task_lock is {}",
                 task_id, task_lock
             );
+
             let (lock_val, lock_result) = lock(
                 &mut cluster_connection.clone(),
                 task_lock.clone(),
@@ -65,6 +66,8 @@ async fn sync_task_ids(
                 );
 
                 tokio::spawn(async move {
+                    //获取到分布式锁的线程，先抢到锁，然后设置上task_info_key，再把锁释放掉
+                    //然后进入事件循环
                     let set_options = SetOptions::default()
                         .conditional_set(ExistenceCheck::NX)
                         .with_expiration(redis::SetExpiry::PX(10000));

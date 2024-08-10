@@ -45,17 +45,10 @@ pub async fn get_datasource_list(State(state): State<Pool<MySql>>) -> Result<Res
     handle_response!(get_datasource_list_with_error(state).await)
 }
 async fn get_datasource_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<GetDatasourceListResponse> = DataSourceDao::fetch_all_datasources(&pool)
-        .await?
-        .into_iter()
-        .map(|item| {
-            let addr = format!("{}:{}", item.host, item.port);
-            return GetDatasourceListResponse::new(item.datasource_name, addr, item.timestamp);
-        })
-        .collect();
+    let redis_util = DataSourceDao::fetch_all_datasources(&pool).await?;
     let data = BaseResponse {
         response_code: 0,
-        response_object: res,
+        response_object: redis_util,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }

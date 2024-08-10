@@ -1,5 +1,4 @@
 use redis::cluster::{ClusterClient, ClusterClientBuilder};
-use redis::AsyncCommands;
 
 use std::time::Duration;
 

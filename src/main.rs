@@ -6,6 +6,7 @@ use moka::future::Cache;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
 use mysql_async::binlog::value::BinlogValue;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
+use service::audit_service::create_audit_task;
 use service::database_service::get_database_list;
 use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
@@ -24,10 +25,10 @@ use axum::routing::get;
 use axum::routing::post;
 use axum::Router;
 
+use crate::init_redis::init_redis;
+use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
-
-use crate::init_redis::init_redis;
 use sqlx::{Connection, Row};
 use std::vec;
 use tracing_appender::non_blocking::NonBlockingBuilder;
@@ -40,14 +41,18 @@ extern crate tracing;
 #[macro_use]
 extern crate anyhow;
 async fn create_data() -> Result<(), anyhow::Error> {
+    let _work_guard = setup_logger()?;
+
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect("mysql://root:root@localhost:9306/mydb")
         .await?;
-
+    let mut id_generator_generator = SnowflakeIdGenerator::new(1, 1);
     for i in 0..1000 {
         let i_str = i.to_string();
         let i_next_str = (i + 1).to_string();
+        let id = id_generator_generator.real_time_generate();
+
         sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
             .bind(i_str.clone())
             .bind(i_str.clone())
@@ -89,7 +94,7 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
 #[tokio::main]
 async fn main() {
     if let Err(e) = main_with_error().await {
-        println!("{:?}", e);
+        error!("{:?}", e);
     }
 }
 async fn main_with_error() -> Result<(), anyhow::Error> {
@@ -110,6 +115,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
         .route("/datasource/:id/database/:name/tables", get(get_table_list))
         .route("/datasource/:id", get(get_database_list))
         .route("/task", post(create_task).get(get_task_list))
+        .route("/audit/:id", post(create_audit_task))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();

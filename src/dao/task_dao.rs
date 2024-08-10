@@ -13,6 +13,8 @@ pub struct TaskDao {
     pub task_name: String,
     pub from_datasource_id: i32,
     pub to_datasource_id: i32,
+    pub from_datasource_url: String,
+    pub to_datasource_url: String,
     pub source_database_name: String,
     pub destination_database_name: String,
     pub table_mapping: String,
@@ -21,7 +23,13 @@ pub struct TaskDao {
 }
 
 impl TaskDao {
-    pub async fn create_task(pool: &MySqlPool, task: &CreateTaskReq) -> Result<(), anyhow::Error> {
+    pub async fn create_task(
+        pool: &MySqlPool,
+        task: &CreateTaskReq,
+        from_datasource_url: String,
+        to_datasource_url: String,
+    ) -> Result<(), anyhow::Error> {
+        let table_mapping = serde_json::to_string(&task.table_mapping)?;
         sqlx::query_as!(
             TaskDao,
             r#"
@@ -31,15 +39,19 @@ impl TaskDao {
                 to_datasource_id,
                 source_database_name,
                 destination_database_name,
-                table_mapping
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                table_mapping,
+                from_datasource_url,
+                to_datasource_url
+            ) VALUES (?, ?, ?, ?, ?, ?,?,?)
             "#,
             task.task_name,
             task.from_datasource_id,
             task.to_datasource_id,
             task.source_database_name,
             task.destination_database_name,
-            task.table_mapping
+            table_mapping,
+            from_datasource_url,
+            to_datasource_url
         )
         .execute(pool)
         .await?;
@@ -56,6 +68,8 @@ impl TaskDao {
                 task_name,
                 from_datasource_id,
                 to_datasource_id,
+                from_datasource_url,
+                to_datasource_url,
                 source_database_name,
                 destination_database_name,
                 table_mapping,

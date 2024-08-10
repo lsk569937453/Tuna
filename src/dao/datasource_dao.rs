@@ -4,7 +4,7 @@ use sqlx::types::chrono::DateTime;
 use sqlx::types::chrono::Utc;
 use sqlx::Error;
 use sqlx::FromRow;
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Serialize)]
 pub struct DataSourceDao {
     pub id: i32,
     pub datasource_name: String,

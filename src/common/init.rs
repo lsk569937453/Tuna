@@ -3,7 +3,6 @@ use sqlx::Pool;
 
 pub async fn init_with_error(pool: Pool<MySql>) -> Result<(), anyhow::Error> {
     migrate(pool.clone()).await?;
-    // init_super_user(pool).await?;
     Ok(())
 }
 async fn migrate(pool: Pool<MySql>) -> Result<(), anyhow::Error> {
