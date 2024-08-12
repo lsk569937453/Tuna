@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS task (
     to_datasource_id INT NOT NULL DEFAULT 0,
     from_datasource_url VARCHAR(255) NOT NULL DEFAULT "",
     to_datasource_url VARCHAR(255) NOT NULL DEFAULT "",
-    source_database_name VARCHAR(255) NOT NULL DEFAULT "",
-    destination_database_name VARCHAR(255) NOT NULL DEFAULT "",
+    from_database_name VARCHAR(255) NOT NULL DEFAULT "",
+    to_database_name VARCHAR(255) NOT NULL DEFAULT "",
     table_mapping TEXT NOT NULL,
     timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

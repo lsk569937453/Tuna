@@ -15,8 +15,8 @@ pub struct TaskDao {
     pub to_datasource_id: i32,
     pub from_datasource_url: String,
     pub to_datasource_url: String,
-    pub source_database_name: String,
-    pub destination_database_name: String,
+    pub from_database_name: String,
+    pub to_database_name: String,
     pub table_mapping: String,
     #[serde(with = "util")]
     pub timestamp: DateTime<Utc>,
@@ -37,8 +37,8 @@ impl TaskDao {
                 task_name,
                 from_datasource_id,
                 to_datasource_id,
-                source_database_name,
-                destination_database_name,
+                from_database_name,
+                to_database_name,
                 table_mapping,
                 from_datasource_url,
                 to_datasource_url
@@ -47,8 +47,8 @@ impl TaskDao {
             task.task_name,
             task.from_datasource_id,
             task.to_datasource_id,
-            task.source_database_name,
-            task.destination_database_name,
+            task.from_database_name,
+            task.to_database_name,
             table_mapping,
             from_datasource_url,
             to_datasource_url
@@ -70,8 +70,8 @@ impl TaskDao {
                 to_datasource_id,
                 from_datasource_url,
                 to_datasource_url,
-                source_database_name,
-                destination_database_name,
+                from_database_name,
+                to_database_name,
                 table_mapping,
                 timestamp
             FROM task
@@ -98,8 +98,8 @@ impl TaskDao {
                 task_name = ?,
                 from_datasource_id = ?,
                 to_datasource_id = ?,
-                source_database_name = ?,
-                destination_database_name = ?,
+                from_database_name = ?,
+                to_database_name = ?,
                 table_mapping = ?,
                 timestamp = ?
             WHERE id = ?
@@ -107,8 +107,8 @@ impl TaskDao {
             task.task_name,
             task.from_datasource_id,
             task.to_datasource_id,
-            task.source_database_name,
-            task.destination_database_name,
+            task.from_database_name,
+            task.to_database_name,
             task.table_mapping,
             task.timestamp,
             task.id

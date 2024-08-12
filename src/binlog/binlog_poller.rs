@@ -123,7 +123,7 @@ impl BinlogPoller {
                     let db_name = table_map_event.database_name();
                     let table_name = table_map_event.table_name();
                     let key = format!("{}{}", db_name, table_name);
-                    if db_name != self.task_dao.source_database_name {
+                    if db_name != self.task_dao.from_database_name {
                         return Ok(());
                     }
                     let s = self.cache.get(&key).await;
