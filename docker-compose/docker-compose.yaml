@@ -30,7 +30,7 @@ services:
     ports:
       - "13306:3306"
     volumes:
-      - ./init:/docker-entrypoint-initdb.d
+      - ./init2:/docker-entrypoint-initdb.d
       - './conf/:/etc/mysql/conf.d'
     networks:
       - app-tier
