@@ -64,7 +64,7 @@ async fn create_data() -> Result<(), anyhow::Error> {
             .bind(i_str.clone())
             .execute(&pool)
             .await?;
-        sqlx::query("delete from user").execute(&pool).await?;
+        // sqlx::query("delete from user").execute(&pool).await?;
     }
 
     Ok(())
@@ -115,7 +115,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
         .route("/datasource/:id/database/:name/tables", get(get_table_list))
         .route("/datasource/:id", get(get_database_list))
         .route("/task", post(create_task).get(get_task_list))
-        .route("/audit/:id", post(create_audit_task))
+        .route("/audit", post(create_audit_task))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
