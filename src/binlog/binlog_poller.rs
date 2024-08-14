@@ -22,7 +22,7 @@ use sqlx::Row;
 use crate::dao::task_dao::TaskDao;
 
 pub struct BinlogPoller {
-    cluster_connection: ClusterConnection,
+    redis_cluster_connection: ClusterConnection,
     task_dao: TaskDao,
     current_gtid_set: Option<String>,
     binlog_stream: BinlogStream,
@@ -32,8 +32,10 @@ pub struct BinlogPoller {
     current_table_map_event: Option<TableMapEvent<'static>>,
     column_list: Option<Vec<String>>,
     cache: Cache<String, Vec<String>>,
-    source_mysql_connection: MySqlConnection,
-    destination_mysql_connection: MySqlConnection,
+    from_mysql_connection: MySqlConnection,
+    table_mapping_hash_map: HashMap<String, String>,
+    to_database_name: String,
+    to_mysql_connection: MySqlConnection,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -88,8 +90,11 @@ impl BinlogPoller {
             BinlogPoller::create_mysql_connection(task_dao.clone().from_datasource_url).await?;
         let destination =
             BinlogPoller::create_mysql_connection(task_dao.clone().to_datasource_url).await?;
+        let table_mapping_hash_map: HashMap<String, String> =
+            serde_json::from_str(&task_dao.table_mapping)?;
+        let to_database_name = task_dao.clone().to_database_name;
         let sel = Self {
-            cluster_connection: cluster_connection,
+            redis_cluster_connection: cluster_connection,
             task_dao: task_dao,
             current_gtid_set: None,
             binlog_stream: stream,
@@ -99,8 +104,10 @@ impl BinlogPoller {
             current_table_map_event: None,
             column_list: None,
             cache: Cache::new(1000),
-            source_mysql_connection: source,
-            destination_mysql_connection: destination,
+            from_mysql_connection: source,
+            to_mysql_connection: destination,
+            to_database_name: to_database_name,
+            table_mapping_hash_map,
         };
         Ok(sel)
     }
@@ -154,8 +161,16 @@ impl BinlogPoller {
                     let table_map_eventt = self.current_table_map_event.clone();
                     let data = table_map_eventt.ok_or(anyhow!(""))?;
                     let column_list = self.column_list.clone().ok_or(anyhow!(""))?;
-                    let sql =
-                        parse_sql_with_error(rows_event_data, data.clone(), column_list).await?;
+                    let to_table_name = self.to_database_name.clone();
+                    let table_mapping_hash_map = self.table_mapping_hash_map.clone();
+                    let sql = parse_sql_with_error(
+                        rows_event_data,
+                        data.clone(),
+                        column_list,
+                        to_table_name,
+                        table_mapping_hash_map,
+                    )
+                    .await?;
                     Some(sql)
                 }
                 EventData::QueryEvent(query_event) => {
@@ -186,13 +201,13 @@ impl BinlogPoller {
 
                 EventData::GtidEvent(gtid_event) => {
                     let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
-                    info!(
-                        "{}-{}-gtid:=============================={}:{}",
-                        self.current_binlog_name,
-                        self.current_binlog_position,
-                        gtid.to_string(),
-                        gtid_event.gno()
-                    );
+                    // info!(
+                    //     "{}-{}-gtid:=============================={}:{}",
+                    //     self.current_binlog_name,
+                    //     self.current_binlog_position,
+                    //     gtid.to_string(),
+                    //     gtid_event.gno()
+                    // );
                     let gtid_sql = format!(
                         r#"set gtid_next='{}:{}';"#,
                         gtid.to_string(),
@@ -202,10 +217,10 @@ impl BinlogPoller {
                     //set gtid_next='UUID:5'
                 }
                 EventData::XidEvent(_) => {
-                    info!(
-                        "{}-{}-COMMIT;",
-                        self.current_binlog_name, self.current_binlog_position,
-                    );
+                    // info!(
+                    //     "{}-{}-COMMIT;",
+                    //     self.current_binlog_name, self.current_binlog_position,
+                    // );
                     Some("COMMIT".to_string())
                 }
                 EventData::RotateEvent(rotate_event) => {
@@ -221,7 +236,7 @@ impl BinlogPoller {
                 }
             };
             if let Some(sql) = sql {
-                self.handle_sql(sql).await;
+                self.handle_sql(sql).await?;
             }
         }
         Ok(())
@@ -234,7 +249,7 @@ impl BinlogPoller {
         let  rows=sqlx::query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION")
     .bind(database)
     .bind(table_name)
-    .fetch_all(&mut self.source_mysql_connection)
+    .fetch_all(&mut self.from_mysql_connection)
     .await?;
         let mut res = vec![];
         for it in rows.iter() {
@@ -243,8 +258,13 @@ impl BinlogPoller {
         }
         Ok(res)
     }
-    async fn handle_sql(&self, sql: String) {
-        info!("current :sql:{}", sql);
+    async fn handle_sql(&mut self, sql: String) -> Result<(), anyhow::Error> {
+        info!("handle_sql sql:{}", sql);
+        let _ = sqlx::query(sql.as_str())
+            .execute(&mut self.to_mysql_connection)
+            .await;
+
+        Ok(())
     }
 }
 fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
@@ -263,9 +283,16 @@ async fn parse_sql_with_error(
     rows_event_data: RowsEventData<'_>,
     table_map_event: TableMapEvent<'_>,
     column_list: Vec<String>,
+    to_database_name: String,
+    table_mapping_hash_map: HashMap<String, String>,
 ) -> Result<String, anyhow::Error> {
-    let db_name = table_map_event.database_name().to_string();
-    let table_name = table_map_event.table_name().to_string();
+    //在解析sql的时候直接拼接目标的数据库和数据表
+    let db_name = to_database_name;
+    let source_table_name = table_map_event.table_name().to_string();
+    let table_name = table_mapping_hash_map
+        .get(&source_table_name)
+        .ok_or(anyhow!("no table mapping"))?
+        .clone();
     match rows_event_data {
         RowsEventData::WriteRowsEvent(write_rows_event) => {
             let rows_event = write_rows_event.rows(&table_map_event);

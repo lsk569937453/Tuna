@@ -7,7 +7,7 @@ use sqlx::MySql;
 use sqlx::Pool;
 use std::time::Duration;
 use tokio::time::interval;
-#[instrument(skip(cluster_connection, pool))]
+#[instrument(name = "sync binlog", skip(cluster_connection, pool))]
 pub async fn sync_binlog_with_error(
     cluster_connection: &mut ClusterConnection,
     pool: Pool<MySql>,
@@ -24,7 +24,7 @@ pub async fn sync_binlog_with_error(
             record_error!(send_heartbeat_with_error(&mut cloned_cluster_connection,task_dao.clone()).await);
             },
             res=binlog_poller.poll() => {
-
+                    record_error!(res);
             }
         }
     }
