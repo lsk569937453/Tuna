@@ -1,6 +1,7 @@
 use crate::dao::task_dao::TaskDao;
 use crate::record_error;
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
+use tokio::time::sleep;
 
 use crate::binlog::binlog_poller::BinlogPoller;
 use sqlx::MySql;
