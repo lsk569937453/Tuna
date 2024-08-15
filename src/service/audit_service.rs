@@ -103,6 +103,10 @@ async fn compare(
         if let Some(data) = data {
             let bool = value.clone() == data;
             info!("source:{:?},dst:{:?},result:{}", value, data, bool);
+
+            if !bool {
+                result.push(key.clone());
+            }
         } else {
             error!("no data,key is :{},value:{:?}", key, value);
             result.push(key.clone());

@@ -8,5 +8,7 @@ CREATE TABLE IF NOT EXISTS task (
     from_database_name VARCHAR(255) NOT NULL DEFAULT "",
     to_database_name VARCHAR(255) NOT NULL DEFAULT "",
     table_mapping TEXT NOT NULL,
-    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE INDEX idx_union_unique (from_datasource_id, to_datasource_id, from_database_name, to_database_name)
+
 );
