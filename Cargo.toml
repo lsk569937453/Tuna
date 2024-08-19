@@ -39,5 +39,5 @@ uuid = { version = "1.8.0", features = [
 byteorder = "1.4.3"
 mysql_common = "0.32.4"
 redis = { version = "0.26.1", features = ["cluster-async", "tokio-comp"] }
-sqlparser = "0.49.0"
+sqlparser = "0.50.0"
 rs-snowflake = "0.6.0"

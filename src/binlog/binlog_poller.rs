@@ -8,6 +8,7 @@ use mysql_async::binlog::events::EventData;
 use mysql_async::binlog::events::TableMapEvent;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows};
 use mysql_async::binlog::value::BinlogValue;
+use mysql_async::prelude::Query;
 use mysql_async::BinlogStream;
 use mysql_async::Column;
 use mysql_async::{Conn, Sid};
@@ -37,7 +38,7 @@ pub struct BinlogPoller {
     from_mysql_connection: MySqlConnection,
     table_mapping_hash_map: HashMap<String, TableMappingItem>,
     to_database_name: String,
-    to_mysql_connection: MySqlConnection,
+    to_mysql_connection: Conn,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -91,7 +92,7 @@ impl BinlogPoller {
         let source =
             BinlogPoller::create_mysql_connection(task_dao.clone().from_datasource_url).await?;
         let destination =
-            BinlogPoller::create_mysql_connection(task_dao.clone().to_datasource_url).await?;
+            BinlogPoller::create_mysql_connection2(task_dao.clone().to_datasource_url).await?;
         let table_mapping_hash_map: HashMap<String, TableMappingItem> =
             serde_json::from_str(&task_dao.table_mapping)?;
         let to_database_name = task_dao.clone().to_database_name;
@@ -117,6 +118,12 @@ impl BinlogPoller {
         datasource_url: String,
     ) -> Result<MySqlConnection, anyhow::Error> {
         let conn = MySqlConnection::connect(&datasource_url).await?;
+        Ok(conn)
+    }
+    pub async fn create_mysql_connection2(datasource_url: String) -> Result<Conn, anyhow::Error> {
+        let pool = mysql_async::Pool::from_url(datasource_url)?;
+        let mut conn = pool.get_conn().await?;
+
         Ok(conn)
     }
     #[instrument]
@@ -177,19 +184,10 @@ impl BinlogPoller {
                 }
                 EventData::QueryEvent(query_event) => {
                     let sql = String::from_utf8_lossy(query_event.query_raw());
-                    let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
-                    let ast_list = Parser::parse_sql(&dialect, sql.as_ref())?;
-                    let first_ast = ast_list.first().ok_or(anyhow!("parse_sql error"))?;
-                    match first_ast {
-                        Statement::StartTransaction {
-                            modes,
-                            begin,
-                            modifier,
-                        } => {
-                            info!("QueryEvent:{}", sql);
-                            Some("BEGIN;".to_string())
-                        }
-                        _ => None,
+                    if sql != "BEGIN" {
+                        Some("COMMIT".to_string())
+                    } else {
+                        Some(sql.to_string())
                     }
                 }
                 EventData::RowsQueryEvent(rows_query_event) => {
@@ -262,10 +260,7 @@ impl BinlogPoller {
     }
     async fn handle_sql(&mut self, sql: String) -> Result<(), anyhow::Error> {
         info!("handle_sql sql:{}", sql);
-        let _ = sqlx::query(sql.as_str())
-            .execute(&mut self.to_mysql_connection)
-            .await?;
-
+        sql.as_str().run(&mut self.to_mysql_connection).await?;
         Ok(())
     }
 }
@@ -517,5 +512,27 @@ pub fn parse_column(
     match column_name_option {
         Some(r) => Ok(format!("{}={}", r, res)),
         None => Ok(res),
+    }
+}
+// src/lib.rs
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parser() {
+        let sql = "CREATE USER 'user'@'%' IDENTIFIED WITH 'mysql_native_password' AS '*D5D9F81F5542DE067FFF5FF7A4CA4BDD322C578F'";
+        let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
+        let statements = Parser::new(&dialect)
+            // Parse a SQL string with 2 separate statements
+            .try_with_sql(sql)
+            .unwrap()
+            .parse_statements()
+            .unwrap();
+        // let first_ast = ast_list.first().ok_or(anyhow!("parse_sql error")).unwrap();
     }
 }
