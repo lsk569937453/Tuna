@@ -136,12 +136,19 @@ impl BinlogPoller {
 
             let sql = match event_data {
                 EventData::TableMapEvent(table_map_event) => {
-                    let db_name = table_map_event.database_name();
-                    let table_name = table_map_event.table_name();
+                    let db_name = table_map_event.database_name().clone();
+                    let table_name = table_map_event.table_name().clone();
                     let key = format!("{}{}", db_name, table_name);
-                    if db_name != self.task_dao.from_database_name {
+                    self.current_table_map_event = Some(table_map_event.clone().into_owned());
+
+                    if !should_save(
+                        self.current_table_map_event.clone(),
+                        self.table_mapping_hash_map.clone(),
+                        self.task_dao.from_database_name.clone(),
+                    ) {
                         return Ok(());
                     }
+
                     let s = self.cache.get(&key).await;
 
                     //可能查询很多次
@@ -160,23 +167,26 @@ impl BinlogPoller {
                         s.unwrap()
                     };
                     self.column_list = Some(current_column_list);
-                    self.current_table_map_event = Some(table_map_event.into_owned());
                     None
                 }
                 EventData::RowsEvent(rows_event_data) => {
-                    if !should_save(self.current_table_map_event.clone()) {
+                    if !should_save(
+                        self.current_table_map_event.clone(),
+                        self.table_mapping_hash_map.clone(),
+                        self.task_dao.from_database_name.clone(),
+                    ) {
                         return Ok(());
                     }
                     let table_map_eventt = self.current_table_map_event.clone();
                     let data = table_map_eventt.ok_or(anyhow!(""))?;
                     let column_list = self.column_list.clone().ok_or(anyhow!(""))?;
-                    let to_table_name = self.to_database_name.clone();
+                    let to_database_name = self.to_database_name.clone();
                     let table_mapping_hash_map = self.table_mapping_hash_map.clone();
                     let sql = parse_sql_with_error(
                         rows_event_data,
                         data.clone(),
                         column_list,
-                        to_table_name,
+                        to_database_name,
                         table_mapping_hash_map,
                     )
                     .await?;
@@ -264,10 +274,17 @@ impl BinlogPoller {
         Ok(())
     }
 }
-fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
+fn should_save(
+    current_table_map_event: Option<TableMapEvent>,
+    table_mapping_hash_map: HashMap<String, TableMappingItem>,
+    from_database_name: String,
+) -> bool {
     if let Some(current_map_event) = current_table_map_event.clone() {
-        let db_name = current_map_event.database_name();
-        if db_name == "mydb" {
+        let db_name = current_map_event.database_name().to_string();
+        let first = db_name == from_database_name;
+        let second = table_mapping_hash_map
+            .contains_key(current_map_event.table_name().to_string().as_str());
+        if first && second {
             return true;
         } else {
             return false;
