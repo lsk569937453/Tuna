@@ -123,7 +123,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     Ok(())
 }
 async fn parse_colomns(database: String, table_name: String) -> Result<Vec<String>, anyhow::Error> {
-    let mut conn = MySqlConnection::connect("mysql://root:root@localhost:9306").await?;
+    let mut conn = MySqlConnection::connect("mysql://root:root2@localhost:13306").await?;
     let  rows=sqlx::query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION")
     .bind(database)
     .bind(table_name)
@@ -150,8 +150,8 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
 
     let cache: Cache<String, Vec<String>> = Cache::new(10_000);
     println!("a");
-    let mysql = Conn::new(Opts::from_url("mysql://root:root@127.0.0.1:9306")?).await?;
-    let input = "f8298d9c-5398-11ef-a4ff-0242ac190003:1-1136";
+    let mysql = Conn::new(Opts::from_url("mysql://root:root2@127.0.0.1:13306")?).await?;
+    let input = "4675d286-5dd4-11ef-976c-0242c0a83002:1";
     let sid = input.parse::<Sid>()?;
 
     // let e = input.parse::<Sid>().unwrap_err();
@@ -159,7 +159,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
         .get_binlog_stream(
             mysql_async::BinlogStreamRequest::new(11)
                 .with_gtid()
-                .with_gtid_set(vec![sid]),
+                .with_gtid_set(vec![]),
         )
         .await?;
     println!("a1");
@@ -185,7 +185,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 let db_name = table_map_event.database_name();
                 let table_name = table_map_event.table_name();
                 let key = format!("{}{}", db_name, table_name);
-                if db_name != "mydb" {
+                if db_name != "mydb2" {
                     // println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
                     continue;
                 }
@@ -255,7 +255,7 @@ async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
 fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
     if let Some(current_map_event) = current_table_map_event.clone() {
         let db_name = current_map_event.database_name();
-        if db_name == "mydb" {
+        if db_name == "mydb2" {
             return true;
         } else {
             return false;
