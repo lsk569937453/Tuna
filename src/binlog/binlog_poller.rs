@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::vojo::create_task_req::TableMappingItem;
 use anyhow::anyhow;
 use futures::StreamExt;
 use moka::future::Cache;
@@ -7,7 +8,9 @@ use mysql_async::binlog::events::EventData;
 use mysql_async::binlog::events::TableMapEvent;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows};
 use mysql_async::binlog::value::BinlogValue;
+use mysql_async::prelude::Query;
 use mysql_async::BinlogStream;
+use mysql_async::Column;
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
 use redis::cluster_async::ClusterConnection;
@@ -33,9 +36,9 @@ pub struct BinlogPoller {
     column_list: Option<Vec<String>>,
     cache: Cache<String, Vec<String>>,
     from_mysql_connection: MySqlConnection,
-    table_mapping_hash_map: HashMap<String, String>,
+    table_mapping_hash_map: HashMap<String, TableMappingItem>,
     to_database_name: String,
-    to_mysql_connection: MySqlConnection,
+    to_mysql_connection: Conn,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -89,8 +92,8 @@ impl BinlogPoller {
         let source =
             BinlogPoller::create_mysql_connection(task_dao.clone().from_datasource_url).await?;
         let destination =
-            BinlogPoller::create_mysql_connection(task_dao.clone().to_datasource_url).await?;
-        let table_mapping_hash_map: HashMap<String, String> =
+            BinlogPoller::create_mysql_connection2(task_dao.clone().to_datasource_url).await?;
+        let table_mapping_hash_map: HashMap<String, TableMappingItem> =
             serde_json::from_str(&task_dao.table_mapping)?;
         let to_database_name = task_dao.clone().to_database_name;
         let sel = Self {
@@ -117,6 +120,12 @@ impl BinlogPoller {
         let conn = MySqlConnection::connect(&datasource_url).await?;
         Ok(conn)
     }
+    pub async fn create_mysql_connection2(datasource_url: String) -> Result<Conn, anyhow::Error> {
+        let pool = mysql_async::Pool::from_url(datasource_url)?;
+        let mut conn = pool.get_conn().await?;
+
+        Ok(conn)
+    }
     #[instrument]
     pub async fn poll(&mut self) -> Result<(), anyhow::Error> {
         if let Some(Ok(event)) = self.binlog_stream.next().await {
@@ -127,12 +136,19 @@ impl BinlogPoller {
 
             let sql = match event_data {
                 EventData::TableMapEvent(table_map_event) => {
-                    let db_name = table_map_event.database_name();
-                    let table_name = table_map_event.table_name();
+                    let db_name = table_map_event.database_name().clone();
+                    let table_name = table_map_event.table_name().clone();
                     let key = format!("{}{}", db_name, table_name);
-                    if db_name != self.task_dao.from_database_name {
+                    self.current_table_map_event = Some(table_map_event.clone().into_owned());
+
+                    if !should_save(
+                        self.current_table_map_event.clone(),
+                        self.table_mapping_hash_map.clone(),
+                        self.task_dao.from_database_name.clone(),
+                    ) {
                         return Ok(());
                     }
+
                     let s = self.cache.get(&key).await;
 
                     //可能查询很多次
@@ -151,23 +167,26 @@ impl BinlogPoller {
                         s.unwrap()
                     };
                     self.column_list = Some(current_column_list);
-                    self.current_table_map_event = Some(table_map_event.into_owned());
                     None
                 }
                 EventData::RowsEvent(rows_event_data) => {
-                    if !should_save(self.current_table_map_event.clone()) {
+                    if !should_save(
+                        self.current_table_map_event.clone(),
+                        self.table_mapping_hash_map.clone(),
+                        self.task_dao.from_database_name.clone(),
+                    ) {
                         return Ok(());
                     }
                     let table_map_eventt = self.current_table_map_event.clone();
                     let data = table_map_eventt.ok_or(anyhow!(""))?;
                     let column_list = self.column_list.clone().ok_or(anyhow!(""))?;
-                    let to_table_name = self.to_database_name.clone();
+                    let to_database_name = self.to_database_name.clone();
                     let table_mapping_hash_map = self.table_mapping_hash_map.clone();
                     let sql = parse_sql_with_error(
                         rows_event_data,
                         data.clone(),
                         column_list,
-                        to_table_name,
+                        to_database_name,
                         table_mapping_hash_map,
                     )
                     .await?;
@@ -175,19 +194,10 @@ impl BinlogPoller {
                 }
                 EventData::QueryEvent(query_event) => {
                     let sql = String::from_utf8_lossy(query_event.query_raw());
-                    let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
-                    let ast_list = Parser::parse_sql(&dialect, sql.as_ref())?;
-                    let first_ast = ast_list.first().ok_or(anyhow!("parse_sql error"))?;
-                    match first_ast {
-                        Statement::StartTransaction {
-                            modes,
-                            begin,
-                            modifier,
-                        } => {
-                            info!("QueryEvent:{}", sql);
-                            Some("BEGIN".to_string())
-                        }
-                        _ => None,
+                    if sql != "BEGIN" {
+                        Some("COMMIT".to_string())
+                    } else {
+                        Some(sql.to_string())
                     }
                 }
                 EventData::RowsQueryEvent(rows_query_event) => {
@@ -221,7 +231,7 @@ impl BinlogPoller {
                     //     "{}-{}-COMMIT;",
                     //     self.current_binlog_name, self.current_binlog_position,
                     // );
-                    Some("COMMIT".to_string())
+                    Some("COMMIT;".to_string())
                 }
                 EventData::RotateEvent(rotate_event) => {
                     self.current_binlog_name = rotate_event.name().to_string();
@@ -260,17 +270,21 @@ impl BinlogPoller {
     }
     async fn handle_sql(&mut self, sql: String) -> Result<(), anyhow::Error> {
         info!("handle_sql sql:{}", sql);
-        let _ = sqlx::query(sql.as_str())
-            .execute(&mut self.to_mysql_connection)
-            .await;
-
+        sql.as_str().run(&mut self.to_mysql_connection).await?;
         Ok(())
     }
 }
-fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
+fn should_save(
+    current_table_map_event: Option<TableMapEvent>,
+    table_mapping_hash_map: HashMap<String, TableMappingItem>,
+    from_database_name: String,
+) -> bool {
     if let Some(current_map_event) = current_table_map_event.clone() {
-        let db_name = current_map_event.database_name();
-        if db_name == "mydb" {
+        let db_name = current_map_event.database_name().to_string();
+        let first = db_name == from_database_name;
+        let second = table_mapping_hash_map
+            .contains_key(current_map_event.table_name().to_string().as_str());
+        if first && second {
             return true;
         } else {
             return false;
@@ -284,7 +298,7 @@ async fn parse_sql_with_error(
     table_map_event: TableMapEvent<'_>,
     column_list: Vec<String>,
     to_database_name: String,
-    table_mapping_hash_map: HashMap<String, String>,
+    table_mapping_hash_map: HashMap<String, TableMappingItem>,
 ) -> Result<String, anyhow::Error> {
     //在解析sql的时候直接拼接目标的数据库和数据表
     let db_name = to_database_name;
@@ -316,10 +330,11 @@ async fn parse_sql_with_error(
 async fn parse_insert_sql(
     mut rows_event: RowsEventRows<'_>,
     db_name: String,
-    table_name: String,
+    table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
 ) -> Result<String, anyhow::Error> {
     // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
+    let table_name = table_mapping_item.to_table_name;
     let mut column_names = vec![];
     let mut column_values = vec![];
     let mut res = "".to_string();
@@ -333,34 +348,8 @@ async fn parse_insert_sql(
 
                         let value = r2.take(index);
                         if let Some(v) = value {
-                            match v {
-                                BinlogValue::Value(v) => match v {
-                                    Value::Int(i) => {
-                                        column_values.push(format!("{}", i));
-                                    }
-                                    Value::Bytes(s) => {
-                                        column_values
-                                            .push(format!("\"{}\"", String::from_utf8_lossy(&s)));
-                                    }
-                                    Value::Double(v) => {
-                                        column_values.push("NULL".to_string());
-                                    }
-                                    Value::Float(v) => {}
-                                    Value::UInt(v) => {
-                                        column_values.push(format!("{}", v));
-                                    }
-                                    Value::NULL => {
-                                        column_values.push("NULL".to_string());
-                                    }
-                                    _ => {}
-                                },
-                                BinlogValue::Jsonb(aaa) => {
-                                    info!("jsonb: {:?}", aaa);
-                                }
-                                BinlogValue::JsonDiff(ss) => {
-                                    info!("jsondiff: {:?}", ss);
-                                }
-                            }
+                            let condition = parse_column(None, v)?;
+                            column_values.push(condition);
                         }
                     }
                 }
@@ -392,10 +381,12 @@ async fn parse_insert_sql(
 async fn parse_update_sql(
     mut rows_event: RowsEventRows<'_>,
     db_name: String,
-    table_name: String,
+    table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
 ) -> Result<String, anyhow::Error> {
-    let mut before_values = vec![];
+    let table_name = table_mapping_item.to_table_name;
+    let from_primary_key = table_mapping_item.from_primary_key;
+    let mut primary_condition = "".to_string();
     let mut after_values = vec![];
     let mut column_names = vec![];
 
@@ -410,46 +401,12 @@ async fn parse_update_sql(
                         let before_value = r1.take(index);
 
                         let after_value = r2.take(index);
-                        if let (Some(before_value), Some(after_value)) = (before_value, after_value)
-                        {
-                            match (before_value, after_value) {
-                                (
-                                    BinlogValue::Value(Value::Int(before_i)),
-                                    BinlogValue::Value(Value::Int(after_i)),
-                                ) => {
-                                    let before_value =
-                                        format!(r#"{}={}"#, column_list[index], before_i);
-                                    let after_value =
-                                        format!(r#"{}={}"#, column_list[index], after_i);
-                                    before_values.push(before_value);
-                                    after_values.push(after_value);
-                                }
-                                (
-                                    BinlogValue::Value(Value::Bytes(before_i)),
-                                    BinlogValue::Value(Value::Bytes(after_i)),
-                                ) => {
-                                    let before_value = format!(
-                                        r#"{}={}"#,
-                                        column_list[index],
-                                        String::from_utf8_lossy(&before_i)
-                                    );
-                                    let after_value = format!(
-                                        r#"{}="{}""#,
-                                        column_list[index],
-                                        String::from_utf8_lossy(&after_i)
-                                    );
-                                    before_values.push(before_value);
-                                    after_values.push(after_value);
-                                }
-                                (
-                                    BinlogValue::Value(Value::Double(before_i)),
-                                    BinlogValue::Value(Value::Double(after_i)),
-                                ) => {}
-                                (
-                                    BinlogValue::Value(Value::UInt(before_i)),
-                                    BinlogValue::Value(Value::UInt(after_i)),
-                                ) => {}
-                                _ => {}
+                        if let (_, Some(after_value)) = (before_value, after_value) {
+                            let condition =
+                                parse_column(Some(column_list[index].clone()), after_value)?;
+                            after_values.push(condition.clone());
+                            if column_list[index].clone() == from_primary_key {
+                                primary_condition = condition;
                             }
                         }
                     }
@@ -471,8 +428,8 @@ async fn parse_update_sql(
         "UPDATE `{}`.`{}` SET {} WHERE {} LIMIT 1;",
         db_name,
         table_name,
-        before_values.join(" , "),
-        after_values.join(" AND  ")
+        after_values.join(" , "),
+        primary_condition
     );
     info!("{}", res);
     Ok(res)
@@ -480,9 +437,10 @@ async fn parse_update_sql(
 async fn parse_delete_sql(
     mut rows_event: RowsEventRows<'_>,
     db_name: String,
-    table_name: String,
+    table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
 ) -> Result<String, anyhow::Error> {
+    let table_name = table_mapping_item.to_table_name;
     let mut column_names = vec![];
     let mut column_values = vec![];
     let mut res = "".to_string();
@@ -495,36 +453,10 @@ async fn parse_delete_sql(
                         column_names.push(column_list[index].clone());
 
                         let value = r1.take(index);
-                        if let Some(v) = value {
-                            match v {
-                                BinlogValue::Value(v) => match v {
-                                    Value::Int(i) => {
-                                        let current = format!(r#"{}={}"#, column_list[index], i);
-                                        column_values.push(current);
-                                    }
-                                    Value::Bytes(s) => {
-                                        let value = String::from_utf8_lossy(&s);
-                                        let current =
-                                            format!(r#"{}="{}""#, column_list[index], value);
-                                        column_values.push(current);
-                                    }
-                                    Value::Double(v) => {
-                                        // column_values.push("NULL".to_string());
-                                    }
-                                    Value::Float(v) => {}
-                                    Value::UInt(v) => {
-                                        // column_values.push(format!("{}", v));
-                                    }
-                                    Value::NULL => {}
-                                    _ => {}
-                                },
-                                BinlogValue::Jsonb(aaa) => {
-                                    info!("jsonb: {:?}", aaa);
-                                }
-                                BinlogValue::JsonDiff(ss) => {
-                                    info!("jsondiff: {:?}", ss);
-                                }
-                            }
+                        if let Some(binlog_value) = value {
+                            let condition =
+                                parse_column(Some(column_list[index].clone()), binlog_value)?;
+                            column_values.push(condition);
                         }
                     }
                 }
@@ -551,4 +483,73 @@ async fn parse_delete_sql(
     );
     info!("{}", res);
     Ok(res)
+}
+pub fn parse_column(
+    column_name_option: Option<String>,
+    binlog_value: BinlogValue,
+) -> Result<String, anyhow::Error> {
+    let res = match binlog_value {
+        BinlogValue::Value(v) => match v {
+            Value::Int(i) => {
+                let current = format!(r#"{}"#, i);
+                current
+            }
+            Value::Bytes(s) => {
+                let value = String::from_utf8_lossy(&s);
+                let current = format!(r#""{}""#, value);
+                current
+            }
+            Value::Double(v) => {
+                let current = format!(r#"={}"#, v);
+                current
+            }
+            Value::Float(v) => {
+                let current = format!(r#"{}"#, v);
+                current
+            }
+            Value::UInt(v) => {
+                let current = format!(r#"{}"#, v);
+                current
+            }
+            Value::NULL => {
+                let current = format!(r#"NULL"#,);
+                current
+            }
+            _ => "".to_string(),
+        },
+        BinlogValue::Jsonb(aaa) => {
+            info!("jsonb: {:?}", aaa);
+            "".to_string()
+        }
+        BinlogValue::JsonDiff(ss) => {
+            info!("jsondiff: {:?}", ss);
+            "".to_string()
+        }
+    };
+    match column_name_option {
+        Some(r) => Ok(format!("{}={}", r, res)),
+        None => Ok(res),
+    }
+}
+// src/lib.rs
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parser() {
+        let sql = "CREATE USER 'user'@'%' IDENTIFIED WITH 'mysql_native_password' AS '*D5D9F81F5542DE067FFF5FF7A4CA4BDD322C578F'";
+        let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
+        let statements = Parser::new(&dialect)
+            // Parse a SQL string with 2 separate statements
+            .try_with_sql(sql)
+            .unwrap()
+            .parse_statements()
+            .unwrap();
+        // let first_ast = ast_list.first().ok_or(anyhow!("parse_sql error")).unwrap();
+    }
 }

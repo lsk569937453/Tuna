@@ -7,6 +7,7 @@ use crate::vojo::audit_task_res;
 use crate::vojo::audit_task_res::AuditTaskRes;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::create_task_req::CreateTaskReq;
+use crate::vojo::create_task_req::TableMappingItem;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -37,8 +38,9 @@ async fn create_audit_task_with_error(
     audit_task_req: AuditTaskReq,
 ) -> Result<String, anyhow::Error> {
     let task_dao = TaskDao::get_task(&pool, audit_task_req.task_id).await?;
-    let table_mapping: HashMap<String, String> = serde_json::from_str(&task_dao.table_mapping)?;
-    let (from_table, to_table) = table_mapping
+    let table_mapping: HashMap<String, TableMappingItem> =
+        serde_json::from_str(&task_dao.table_mapping)?;
+    let (from_table, table_mapping_item) = table_mapping
         .iter()
         .next()
         .ok_or(anyhow!("no table mapping"))?;
@@ -53,14 +55,14 @@ async fn create_audit_task_with_error(
         &mut to_mysql_connection,
         audit_task_req.to_primary_key.clone(),
         task_dao.to_database_name.clone(),
-        to_table.clone(),
+        table_mapping_item.to_table_name.clone(),
     )
     .await?;
     let right_compare = compare(
         &mut to_mysql_connection,
         audit_task_req.to_primary_key,
         task_dao.to_database_name,
-        to_table.clone(),
+        table_mapping_item.to_table_name.clone(),
         &mut from_mysql_connection,
         audit_task_req.from_primary_key,
         task_dao.from_database_name,
