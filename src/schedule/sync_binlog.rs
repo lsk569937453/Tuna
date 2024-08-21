@@ -25,7 +25,7 @@ pub async fn sync_binlog_with_error(
             record_error!(send_heartbeat_with_error(&mut cloned_cluster_connection,task_dao.clone()).await);
             },
             res=binlog_poller.poll() => {
-                    record_error!(res);
+                    res?;
             }
         }
     }

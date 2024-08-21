@@ -195,9 +195,9 @@ impl BinlogPoller {
                 EventData::QueryEvent(query_event) => {
                     let sql = String::from_utf8_lossy(query_event.query_raw());
                     if sql != "BEGIN" {
-                        Some("COMMIT".to_string())
+                        Some(vec!["COMMIT".to_string()])
                     } else {
-                        Some(sql.to_string())
+                        Some(vec![sql.to_string()])
                     }
                 }
                 EventData::RowsQueryEvent(rows_query_event) => {
@@ -223,7 +223,7 @@ impl BinlogPoller {
                         gtid.to_string(),
                         gtid_event.gno()
                     );
-                    Some(gtid_sql)
+                    Some(vec![gtid_sql])
                     //set gtid_next='UUID:5'
                 }
                 EventData::XidEvent(_) => {
@@ -231,7 +231,7 @@ impl BinlogPoller {
                     //     "{}-{}-COMMIT;",
                     //     self.current_binlog_name, self.current_binlog_position,
                     // );
-                    Some("COMMIT;".to_string())
+                    Some(vec!["COMMIT;".to_string()])
                 }
                 EventData::RotateEvent(rotate_event) => {
                     self.current_binlog_name = rotate_event.name().to_string();
@@ -248,6 +248,8 @@ impl BinlogPoller {
             if let Some(sql) = sql {
                 self.handle_sql(sql).await?;
             }
+        } else {
+            return Err(anyhow!("poll error"));
         }
         Ok(())
     }
@@ -268,9 +270,11 @@ impl BinlogPoller {
         }
         Ok(res)
     }
-    async fn handle_sql(&mut self, sql: String) -> Result<(), anyhow::Error> {
-        info!("handle_sql sql:{}", sql);
-        sql.as_str().run(&mut self.to_mysql_connection).await?;
+    async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<(), anyhow::Error> {
+        for sql in sqls.iter() {
+            info!("handle_sql sql:{}", sql);
+            sql.as_str().run(&mut self.to_mysql_connection).await?;
+        }
         Ok(())
     }
 }
@@ -299,7 +303,7 @@ async fn parse_sql_with_error(
     column_list: Vec<String>,
     to_database_name: String,
     table_mapping_hash_map: HashMap<String, TableMappingItem>,
-) -> Result<String, anyhow::Error> {
+) -> Result<Vec<String>, anyhow::Error> {
     //在解析sql的时候直接拼接目标的数据库和数据表
     let db_name = to_database_name;
     let source_table_name = table_map_event.table_name().to_string();
@@ -332,13 +336,14 @@ async fn parse_insert_sql(
     db_name: String,
     table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
-) -> Result<String, anyhow::Error> {
-    // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
+) -> Result<Vec<String>, anyhow::Error> {
     let table_name = table_mapping_item.to_table_name;
     let mut column_names = vec![];
     let mut column_values = vec![];
-    let mut res = "".to_string();
+    let mut res = vec![];
     while let Some(item) = rows_event.next() {
+        column_names.clear();
+        column_values.clear();
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (None, Some(mut r2)) => {
@@ -348,7 +353,7 @@ async fn parse_insert_sql(
 
                         let value = r2.take(index);
                         if let Some(v) = value {
-                            let condition = parse_column(None, v)?;
+                            let condition = parse_column(None, v, false)?;
                             column_values.push(condition);
                         }
                     }
@@ -367,15 +372,17 @@ async fn parse_insert_sql(
                 info!("An error occurred: {:?}", e);
             }
         }
+        let current_sql = format!(
+            "INSERT INTO `{}`.`{}`({}) VALUES ({});",
+            db_name,
+            table_name,
+            column_names.join(" , "),
+            column_values.join(" , ")
+        );
+        // info!("{}", current_sql);
+        res.push(current_sql);
     }
-    res = format!(
-        "INSERT INTO `{}`.`{}`({}) VALUES ({});",
-        db_name,
-        table_name,
-        column_names.join(" , "),
-        column_values.join(" , ")
-    );
-    info!("{}", res);
+
     Ok(res)
 }
 async fn parse_update_sql(
@@ -383,27 +390,26 @@ async fn parse_update_sql(
     db_name: String,
     table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
-) -> Result<String, anyhow::Error> {
+) -> Result<Vec<String>, anyhow::Error> {
     let table_name = table_mapping_item.to_table_name;
     let from_primary_key = table_mapping_item.from_primary_key;
     let mut primary_condition = "".to_string();
     let mut after_values = vec![];
-    let mut column_names = vec![];
 
-    let mut res = "".to_string();
+    let mut res = vec![];
     while let Some(item) = rows_event.next() {
+        after_values.clear();
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (Some(mut r1), Some(mut r2)) => {
                     let columns = r2.columns();
                     for (index, item) in columns.iter().enumerate() {
-                        column_names.push(column_list[index].clone());
                         let before_value = r1.take(index);
 
                         let after_value = r2.take(index);
                         if let (_, Some(after_value)) = (before_value, after_value) {
                             let condition =
-                                parse_column(Some(column_list[index].clone()), after_value)?;
+                                parse_column(Some(column_list[index].clone()), after_value, false)?;
                             after_values.push(condition.clone());
                             if column_list[index].clone() == from_primary_key {
                                 primary_condition = condition;
@@ -423,15 +429,17 @@ async fn parse_update_sql(
                 println!("An error occurred: {:?}", e);
             }
         }
+        let current_sql = format!(
+            "UPDATE `{}`.`{}` SET {} WHERE {} LIMIT 1;",
+            db_name,
+            table_name,
+            after_values.join(" , "),
+            primary_condition
+        );
+        // info!("{}", current_sql);
+        res.push(current_sql);
     }
-    res = format!(
-        "UPDATE `{}`.`{}` SET {} WHERE {} LIMIT 1;",
-        db_name,
-        table_name,
-        after_values.join(" , "),
-        primary_condition
-    );
-    info!("{}", res);
+
     Ok(res)
 }
 async fn parse_delete_sql(
@@ -439,23 +447,21 @@ async fn parse_delete_sql(
     db_name: String,
     table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
-) -> Result<String, anyhow::Error> {
+) -> Result<Vec<String>, anyhow::Error> {
     let table_name = table_mapping_item.to_table_name;
-    let mut column_names = vec![];
     let mut column_values = vec![];
-    let mut res = "".to_string();
+    let mut res = vec![];
     while let Some(item) = rows_event.next() {
+        column_values.clear();
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (Some(mut r1), None) => {
                     let columns = r1.columns();
                     for (index, item) in columns.iter().enumerate() {
-                        column_names.push(column_list[index].clone());
-
                         let value = r1.take(index);
                         if let Some(binlog_value) = value {
                             let condition =
-                                parse_column(Some(column_list[index].clone()), binlog_value)?;
+                                parse_column(Some(column_list[index].clone()), binlog_value, true)?;
                             column_values.push(condition);
                         }
                     }
@@ -474,19 +480,28 @@ async fn parse_delete_sql(
                 println!("An error occurred: {:?}", e);
             }
         }
+        let current_sql = format!(
+            "DELETE FROM `{}`.`{}` WHERE {} LIMIT 1;",
+            db_name,
+            table_name,
+            column_values.join(" AND "),
+        );
+        // info!("{}", current_sql);
+        res.push(current_sql);
     }
-    res = format!(
-        "DELETE FROM `{}`.`{}` WHERE {} LIMIT 1;",
-        db_name,
-        table_name,
-        column_values.join(" AND "),
-    );
-    info!("{}", res);
+
     Ok(res)
 }
+/**
+ * 返回值有两种
+ * 1. column_a=value_a(update,delete)
+ * 2. value_a(insert)
+ * 4. column_a is NULL(delete)
+ */
 pub fn parse_column(
     column_name_option: Option<String>,
     binlog_value: BinlogValue,
+    as_condition: bool,
 ) -> Result<String, anyhow::Error> {
     let res = match binlog_value {
         BinlogValue::Value(v) => match v {
@@ -500,7 +515,7 @@ pub fn parse_column(
                 current
             }
             Value::Double(v) => {
-                let current = format!(r#"={}"#, v);
+                let current = format!(r#"{}"#, v);
                 current
             }
             Value::Float(v) => {
@@ -526,8 +541,15 @@ pub fn parse_column(
             "".to_string()
         }
     };
+
     match column_name_option {
-        Some(r) => Ok(format!("{}={}", r, res)),
+        Some(r) => {
+            if res == "NULL" && as_condition {
+                Ok(format!("{} IS NULL", r))
+            } else {
+                Ok(format!("{}={}", r, res))
+            }
+        }
         None => Ok(res),
     }
 }
