@@ -27,6 +27,7 @@ use axum::routing::post;
 use axum::Router;
 
 use crate::init_redis::init_redis;
+use clap::Parser;
 use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
@@ -41,15 +42,28 @@ use tracing_subscriber::util::SubscriberInitExt;
 extern crate tracing;
 #[macro_use]
 extern crate anyhow;
+#[derive(Parser)]
+#[command(author, version, about, long_about)]
+struct Cli {
+    /// The http port,default port is 80
+    #[arg(
+        default_value_t = 1000,
+        short = 'C',
+        long = "count",
+        value_name = "Count"
+    )]
+    count: u32,
+}
 async fn create_data() -> Result<(), anyhow::Error> {
     let _work_guard = setup_logger()?;
-
+    let cli: Cli = Cli::parse();
+    let count = cli.count;
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect("mysql://root:root@localhost:9306/mydb")
         .await?;
     let mut id_generator_generator = SnowflakeIdGenerator::new(1, 1);
-    for i in 0..1000 {
+    for i in 0..count {
         let i_str = i.to_string();
         let i_next_str = (i + 1).to_string();
         let id = id_generator_generator.real_time_generate();
