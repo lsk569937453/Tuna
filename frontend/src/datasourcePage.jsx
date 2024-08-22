@@ -30,12 +30,14 @@ function DatasourcePage() {
             const mesArray = res.data.message.map(
                 ({
                     datasource_name: datasourceName,
+                    datasource_url: datasourceUrl,
                     addr: addr,
                     timestamp: timestamp
 
                 }) => {
                     return {
                         datasourceName,
+                        datasourceUrl,
                         addr,
                         timestamp
                     };
@@ -125,7 +127,7 @@ function DatasourcePage() {
                                 <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white text-center">
                                     {row.datasourceName}
                                 </Table.Cell>
-                                <Table.Cell className="text-center">  {row.addr}</Table.Cell>
+                                <Table.Cell className="text-center">  {row.datasourceUrl}</Table.Cell>
 
                                 <Table.Cell className="text-center">
                                     <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500">
