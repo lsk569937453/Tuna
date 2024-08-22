@@ -68,18 +68,64 @@ async fn create_data() -> Result<(), anyhow::Error> {
         let i_next_str = (i + 1).to_string();
         let id = id_generator_generator.real_time_generate();
 
-        sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
-            .bind(i_str.clone())
-            .bind(i_str.clone())
-            .bind(i_str.clone())
-            .execute(&pool)
-            .await?;
-        sqlx::query("update user set first_name = ? where username=?")
-            .bind(i_next_str)
-            .bind(i_str.clone())
-            .execute(&pool)
-            .await?;
+        // sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
+        //     .bind(i_str.clone())
+        //     .bind(i_str.clone())
+        //     .bind(i_str.clone())
+        //     .execute(&pool)
+        //     .await?;
+        // sqlx::query("update user set first_name = ? where username=?")
+        //     .bind(i_next_str)
+        //     .bind(i_str.clone())
+        //     .execute(&pool)
+        //     .await?;
         // sqlx::query("delete from user").execute(&pool).await?;
+        sqlx::query(
+            "INSERT INTO `all_types_table` (
+    `tiny_int_col`,
+    `small_int_col`,
+    `medium_int_col`,
+    `big_int_col`,
+    `decimal_col`,
+    `float_col`,
+    `double_col`,
+    `bit_col`,
+    `date_col`,
+    `datetime_col`,
+    `time_col`,
+    `year_col`,
+    `char_col`,
+    `varchar_col`,
+    `binary_col`,
+    `varbinary_col`,
+    `blob_col`,
+    `text_col`,
+    `json_col`
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)",
+        )
+        .bind(i % 8)
+        .bind(i)
+        .bind(i)
+        .bind(i)
+        .bind(i)
+        .bind(i)
+        .bind(i)
+        .bind(i % 2)
+        .bind("2024-08-21")
+        .bind("2024-08-21 12:34:56")
+        .bind("12:34:56")
+        .bind(2024)
+        .bind("A")
+        .bind(i_str.clone())
+        .bind(i_str.clone())
+        .bind(i_str.clone())
+        .bind(i_str.clone())
+        .bind(i_str)
+        .bind(r#"{"key1": "value1", "key2": "value2"}"#)
+        .execute(&pool)
+        .await?;
     }
 
     Ok(())

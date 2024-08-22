@@ -2,12 +2,14 @@ use std::collections::HashMap;
 
 use crate::vojo::create_task_req::TableMappingItem;
 use anyhow::anyhow;
+use chrono::NaiveDateTime;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::EventData;
 use mysql_async::binlog::events::TableMapEvent;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows};
 use mysql_async::binlog::value::BinlogValue;
+use mysql_async::consts::ColumnType;
 use mysql_async::prelude::Query;
 use mysql_async::BinlogStream;
 use mysql_async::Column;
@@ -133,7 +135,7 @@ impl BinlogPoller {
             let event_cloned = event.clone();
             let option_event_data = event_cloned.read_data()?;
             let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
-
+            debug!("event_data: {:?}", event_data);
             let sql = match event_data {
                 EventData::TableMapEvent(table_map_event) => {
                     let db_name = table_map_event.database_name().clone();
@@ -175,6 +177,7 @@ impl BinlogPoller {
                         self.table_mapping_hash_map.clone(),
                         self.task_dao.from_database_name.clone(),
                     ) {
+                        debug!("RowsEvent should not save",);
                         return Ok(());
                     }
                     let table_map_eventt = self.current_table_map_event.clone();
@@ -353,7 +356,7 @@ async fn parse_insert_sql(
 
                         let value = r2.take(index);
                         if let Some(v) = value {
-                            let condition = parse_column(None, v, false)?;
+                            let condition = parse_column(None, v, false, item)?;
                             column_values.push(condition);
                         }
                     }
@@ -408,8 +411,12 @@ async fn parse_update_sql(
 
                         let after_value = r2.take(index);
                         if let (_, Some(after_value)) = (before_value, after_value) {
-                            let condition =
-                                parse_column(Some(column_list[index].clone()), after_value, false)?;
+                            let condition = parse_column(
+                                Some(column_list[index].clone()),
+                                after_value,
+                                false,
+                                item,
+                            )?;
                             after_values.push(condition.clone());
                             if column_list[index].clone() == from_primary_key {
                                 primary_condition = condition;
@@ -449,6 +456,8 @@ async fn parse_delete_sql(
     column_list: Vec<String>,
 ) -> Result<Vec<String>, anyhow::Error> {
     let table_name = table_mapping_item.to_table_name;
+    let from_primary_key = table_mapping_item.from_primary_key;
+
     let mut column_values = vec![];
     let mut res = vec![];
     while let Some(item) = rows_event.next() {
@@ -460,9 +469,15 @@ async fn parse_delete_sql(
                     for (index, item) in columns.iter().enumerate() {
                         let value = r1.take(index);
                         if let Some(binlog_value) = value {
-                            let condition =
-                                parse_column(Some(column_list[index].clone()), binlog_value, true)?;
-                            column_values.push(condition);
+                            if column_list[index].clone() == from_primary_key {
+                                let condition = parse_column(
+                                    Some(column_list[index].clone()),
+                                    binlog_value,
+                                    true,
+                                    item,
+                                )?;
+                                column_values.push(condition);
+                            }
                         }
                     }
                 }
@@ -502,46 +517,30 @@ pub fn parse_column(
     column_name_option: Option<String>,
     binlog_value: BinlogValue,
     as_condition: bool,
+    column: &Column,
 ) -> Result<String, anyhow::Error> {
     let res = match binlog_value {
-        BinlogValue::Value(v) => match v {
-            Value::Int(i) => {
-                let current = format!(r#"{}"#, i);
-                current
+        BinlogValue::Value(v) => {
+            let str = v.as_sql(true);
+            if column.column_type() == ColumnType::MYSQL_TYPE_TIMESTAMP
+                || column.column_type() == ColumnType::MYSQL_TYPE_TIMESTAMP2
+            {
+                let res = format!("FROM_UNIXTIME({})", str);
+                res
+            } else {
+                str
             }
-            Value::Bytes(s) => {
-                let value = String::from_utf8_lossy(&s);
-                let current = format!(r#""{}""#, value);
-                current
-            }
-            Value::Double(v) => {
-                let current = format!(r#"{}"#, v);
-                current
-            }
-            Value::Float(v) => {
-                let current = format!(r#"{}"#, v);
-                current
-            }
-            Value::UInt(v) => {
-                let current = format!(r#"{}"#, v);
-                current
-            }
-            Value::NULL => {
-                let current = format!(r#"NULL"#,);
-                current
-            }
-            _ => "".to_string(),
-        },
+        }
         BinlogValue::Jsonb(aaa) => {
-            info!("jsonb: {:?}", aaa);
-            "".to_string()
+            let t = serde_json::Value::try_from(aaa)?;
+            let str = format!(r#"'{}'"#, t.to_string());
+            str
         }
         BinlogValue::JsonDiff(ss) => {
             info!("jsondiff: {:?}", ss);
             "".to_string()
         }
     };
-
     match column_name_option {
         Some(r) => {
             if res == "NULL" && as_condition {
@@ -572,6 +571,13 @@ mod tests {
             .unwrap()
             .parse_statements()
             .unwrap();
+        // let first_ast = ast_list.first().ok_or(anyhow!("parse_sql error")).unwrap();
+    }
+    #[test]
+    fn test_parser2() {
+        let sql = Value::Time(false, 2, 4, 5, 6, 7);
+        println!("sss,{}", sql.as_sql(false));
+
         // let first_ast = ast_list.first().ok_or(anyhow!("parse_sql error")).unwrap();
     }
 }
