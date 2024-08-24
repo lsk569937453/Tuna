@@ -1,4 +1,4 @@
-use crate::dao::task_dao::TaskDao;
+use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
 use tokio::time::sleep;
@@ -12,7 +12,7 @@ use tokio::time::interval;
 pub async fn sync_binlog_with_error(
     cluster_connection: &mut ClusterConnection,
     pool: Pool<MySql>,
-    task_dao: TaskDao,
+    task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
     let duration = 5000;
     let mut interval = interval(Duration::from_millis(duration));
@@ -34,7 +34,7 @@ pub async fn sync_binlog_with_error(
 #[instrument(skip(cluster_connection))]
 async fn send_heartbeat_with_error(
     cluster_connection: &mut ClusterConnection,
-    task_dao: TaskDao,
+    task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
     let task_info_key = format!("tuna:task:{}", task_dao.id);
     cluster_connection

@@ -1,5 +1,5 @@
 use crate::dao::datasource_dao::DataSourceDao;
-use crate::dao::task_dao::TaskDao;
+use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
 use crate::vojo::audit_task_req;
 use crate::vojo::audit_task_req::AuditTaskReq;
@@ -37,7 +37,7 @@ async fn create_audit_task_with_error(
     pool: Pool<MySql>,
     audit_task_req: AuditTaskReq,
 ) -> Result<String, anyhow::Error> {
-    let task_dao = TaskDao::get_task(&pool, audit_task_req.task_id).await?;
+    let task_dao = SyncTaskDao::get_task(&pool, audit_task_req.task_id).await?;
     let table_mapping: HashMap<String, TableMappingItem> =
         serde_json::from_str(&task_dao.table_mapping)?;
     let (from_table, table_mapping_item) = table_mapping
@@ -207,7 +207,7 @@ pub async fn get_task_list(State(state): State<Pool<MySql>>) -> Result<Response,
     handle_response!(get_task_list_with_error(state).await)
 }
 async fn get_task_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<TaskDao> = TaskDao::fetch_all_tasks(&pool).await?;
+    let res: Vec<SyncTaskDao> = SyncTaskDao::fetch_all_tasks(&pool).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: res,
