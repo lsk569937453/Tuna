@@ -1,3 +1,4 @@
+use crate::dao::audit_task_dao::AuditTaskDao;
 use crate::dao::datasource_dao::DataSourceDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
@@ -37,49 +38,60 @@ async fn create_audit_task_with_error(
     pool: Pool<MySql>,
     audit_task_req: AuditTaskReq,
 ) -> Result<String, anyhow::Error> {
-    let task_dao = SyncTaskDao::get_task(&pool, audit_task_req.task_id).await?;
-    let table_mapping: HashMap<String, TableMappingItem> =
-        serde_json::from_str(&task_dao.table_mapping)?;
-    let (from_table, table_mapping_item) = table_mapping
-        .iter()
-        .next()
-        .ok_or(anyhow!("no table mapping"))?;
-
-    let mut from_mysql_connection = MySqlConnection::connect(&task_dao.from_datasource_url).await?;
-    let mut to_mysql_connection = MySqlConnection::connect(&task_dao.to_datasource_url).await?;
-    let left_compare = compare(
-        &mut from_mysql_connection,
-        audit_task_req.from_primary_key.clone(),
-        task_dao.from_database_name.clone(),
-        from_table.clone(),
-        &mut to_mysql_connection,
-        audit_task_req.to_primary_key.clone(),
-        task_dao.to_database_name.clone(),
-        table_mapping_item.to_table_name.clone(),
-    )
-    .await?;
-    let right_compare = compare(
-        &mut to_mysql_connection,
-        audit_task_req.to_primary_key,
-        task_dao.to_database_name,
-        table_mapping_item.to_table_name.clone(),
-        &mut from_mysql_connection,
-        audit_task_req.from_primary_key,
-        task_dao.from_database_name,
-        from_table.clone(),
-    )
-    .await?;
-    let audit_task_res = AuditTaskRes {
-        left_compare,
-        right_compare,
-    };
-
+    let id = AuditTaskDao::create_task(&pool, audit_task_req.task_id).await?;
     let data = BaseResponse {
         response_code: 0,
-        response_object: audit_task_res,
+        response_object: id,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
+// async fn create_audit_task_with_error_2(
+//     pool: Pool<MySql>,
+//     audit_task_req: AuditTaskReq,
+// ) -> Result<String, anyhow::Error> {
+//     let task_dao = SyncTaskDao::get_task(&pool, audit_task_req.task_id).await?;
+//     let table_mapping: HashMap<String, TableMappingItem> =
+//         serde_json::from_str(&task_dao.table_mapping)?;
+//     let (from_table, table_mapping_item) = table_mapping
+//         .iter()
+//         .next()
+//         .ok_or(anyhow!("no table mapping"))?;
+
+//     let mut from_mysql_connection = MySqlConnection::connect(&task_dao.from_datasource_url).await?;
+//     let mut to_mysql_connection = MySqlConnection::connect(&task_dao.to_datasource_url).await?;
+//     let left_compare = compare(
+//         &mut from_mysql_connection,
+//         audit_task_req.from_primary_key.clone(),
+//         task_dao.from_database_name.clone(),
+//         from_table.clone(),
+//         &mut to_mysql_connection,
+//         audit_task_req.to_primary_key.clone(),
+//         task_dao.to_database_name.clone(),
+//         table_mapping_item.to_table_name.clone(),
+//     )
+//     .await?;
+//     let right_compare = compare(
+//         &mut to_mysql_connection,
+//         audit_task_req.to_primary_key,
+//         task_dao.to_database_name,
+//         table_mapping_item.to_table_name.clone(),
+//         &mut from_mysql_connection,
+//         audit_task_req.from_primary_key,
+//         task_dao.from_database_name,
+//         from_table.clone(),
+//     )
+//     .await?;
+//     let audit_task_res = AuditTaskRes {
+//         left_compare,
+//         right_compare,
+//     };
+
+//     let data = BaseResponse {
+//         response_code: 0,
+//         response_object: audit_task_res,
+//     };
+//     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
+// }
 async fn compare(
     from_mysql_connection: &mut MySqlConnection,
     from_primary_key: String,
