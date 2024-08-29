@@ -1,5 +1,5 @@
 use crate::dao::datasource_dao::DataSourceDao;
-use crate::dao::task_dao::TaskDao;
+use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::create_task_req::CreateTaskReq;
@@ -24,7 +24,7 @@ async fn create_task_with_error(
         DataSourceDao::find_by_id(&pool, create_datasource_req.from_datasource_id).await?;
     let to_datasource =
         DataSourceDao::find_by_id(&pool, create_datasource_req.to_datasource_id).await?;
-    TaskDao::create_task(
+    SyncTaskDao::create_task(
         &pool,
         &create_datasource_req,
         from_datasource.datasource_url,
@@ -41,7 +41,7 @@ pub async fn get_task_list(State(state): State<Pool<MySql>>) -> Result<Response,
     handle_response!(get_task_list_with_error(state).await)
 }
 async fn get_task_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<TaskDao> = TaskDao::fetch_all_tasks(&pool).await?;
+    let res: Vec<SyncTaskDao> = SyncTaskDao::fetch_all_tasks(&pool).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: res,

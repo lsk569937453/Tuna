@@ -10,6 +10,7 @@ import moment from 'moment';
 import { CookiesProvider, useCookies } from 'react-cookie'
 import { useNavigate, NavLink } from "react-router-dom";
 import 'moment/dist/locale/zh-cn';
+import AuditPage from "./auditPage";
 
 const customTheme = {
     root: {
@@ -76,6 +77,11 @@ function HomePage() {
                                         数据源管理
                                     </Sidebar.Item>
                                 </Link>
+                                <Link to="/auditPage" >
+                                    <Sidebar.Item icon={HiChip} >
+                                        稽核管理
+                                    </Sidebar.Item>
+                                </Link>
 
                             </Sidebar.ItemGroup>
                         </Sidebar.Items>
@@ -92,6 +98,7 @@ function HomePage() {
                             <Route path="datasourcePage" element={<DatasourcePage />} />
 
                             <Route path="taskPage" element={<TaskPage />} />
+                            <Route path="auditPage" element={<AuditPage />} />
 
 
                         </Route>

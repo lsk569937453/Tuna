@@ -24,11 +24,11 @@ use sqlx::mysql::MySqlConnection;
 use sqlx::Connection;
 use sqlx::Row;
 
-use crate::dao::task_dao::TaskDao;
+use crate::dao::sync_task_dao::SyncTaskDao;
 
 pub struct BinlogPoller {
     redis_cluster_connection: ClusterConnection,
-    task_dao: TaskDao,
+    task_dao: SyncTaskDao,
     current_gtid_set: Option<String>,
     binlog_stream: BinlogStream,
     current_db_name: String,
@@ -56,7 +56,7 @@ impl std::fmt::Debug for BinlogPoller {
 impl BinlogPoller {
     async fn get_gtid_set(
         mut cluster_connection: ClusterConnection,
-        task_dao: TaskDao,
+        task_dao: SyncTaskDao,
     ) -> Result<Option<Vec<String>>, anyhow::Error> {
         let gtid_set_key = format!("tuna:task:{}:gtid_set", task_dao.id);
         let hash_map: HashMap<String, String> = cluster_connection.hgetall(gtid_set_key).await?;
@@ -70,7 +70,7 @@ impl BinlogPoller {
         Ok(Some(res))
     }
     pub async fn start(
-        task_dao: TaskDao,
+        task_dao: SyncTaskDao,
         cluster_connection: ClusterConnection,
     ) -> Result<Self, anyhow::Error> {
         let from_datasource_url = task_dao.clone().from_datasource_url;

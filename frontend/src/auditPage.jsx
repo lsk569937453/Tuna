@@ -11,7 +11,7 @@ import { ToastContainer, toast } from 'react-toastify';
 
 const pageSize = 5;
 
-function TaskPage() {
+function AuditPage() {
 
     const [openModal, setOpenModal] = useState(false);
     const [datasourceName, setDatasourceName] = useState("");
@@ -85,7 +85,7 @@ function TaskPage() {
             <div className="p-4 flex-col">
                 <div className="mb-4 flex justify-center">
 
-                    <Button onClick={() => setOpenModal(true)}>添加任务</Button>
+                    <Button onClick={() => setOpenModal(true)}>添加稽核任务</Button>
                     <ToastContainer />
 
                     <Modal dismissible show={openModal} onClose={() => setOpenModal(false)} >
@@ -153,4 +153,4 @@ function TaskPage() {
         </div >
     );
 }
-export default TaskPage;
+export default AuditPage;

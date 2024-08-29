@@ -1,4 +1,4 @@
-use crate::dao::task_dao::TaskDao;
+use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
 use crate::schedule::sync_binlog::sync_binlog_with_error;
 use crate::util::redis_util::unlock;
@@ -35,7 +35,7 @@ async fn sync_task_ids(
     cluster_connection: &mut ClusterConnection,
     pool: Pool<MySql>,
 ) -> Result<(), anyhow::Error> {
-    let tasks = TaskDao::fetch_all_tasks(&pool).await?;
+    let tasks = SyncTaskDao::fetch_all_tasks(&pool).await?;
     for task in tasks {
         let cloned_pool = pool.clone();
         let mut cloned_cluster_connection = cluster_connection.clone();

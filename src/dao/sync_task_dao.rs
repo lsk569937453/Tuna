@@ -8,7 +8,7 @@ use sqlx::FromRow;
 
 use crate::vojo::create_task_req::CreateTaskReq;
 #[derive(Debug, FromRow, Serialize, Clone)]
-pub struct TaskDao {
+pub struct SyncTaskDao {
     pub id: i32,
     pub task_name: String,
     pub from_datasource_id: i32,
@@ -22,7 +22,7 @@ pub struct TaskDao {
     pub timestamp: DateTime<Utc>,
 }
 
-impl TaskDao {
+impl SyncTaskDao {
     pub async fn create_task(
         pool: &MySqlPool,
         task: &CreateTaskReq,
@@ -33,7 +33,7 @@ impl TaskDao {
         sqlx::query_as!(
             TaskDao,
             r#"
-            INSERT INTO task (
+            INSERT INTO sync_task (
                 task_name,
                 from_datasource_id,
                 to_datasource_id,
@@ -59,9 +59,9 @@ impl TaskDao {
         Ok(())
     }
 
-    pub async fn get_task(pool: &MySqlPool, task_id: i32) -> Result<TaskDao, anyhow::Error> {
+    pub async fn get_task(pool: &MySqlPool, task_id: i32) -> Result<SyncTaskDao, anyhow::Error> {
         let task = sqlx::query_as!(
-            TaskDao,
+            SyncTaskDao,
             r#"
             SELECT
                 id,
@@ -74,7 +74,7 @@ impl TaskDao {
                 to_database_name,
                 table_mapping,
                 timestamp
-            FROM task
+            FROM sync_task
             WHERE id = ?
             "#,
             task_id
@@ -84,17 +84,17 @@ impl TaskDao {
 
         Ok(task)
     }
-    pub async fn fetch_all_tasks(pool: &MySqlPool) -> Result<Vec<TaskDao>, Error> {
-        let tasks = sqlx::query_as!(TaskDao, "SELECT * FROM task")
+    pub async fn fetch_all_tasks(pool: &MySqlPool) -> Result<Vec<SyncTaskDao>, Error> {
+        let tasks = sqlx::query_as!(SyncTaskDao, "SELECT * FROM sync_task")
             .fetch_all(pool)
             .await?;
 
         Ok(tasks)
     }
-    pub async fn update_task(pool: &MySqlPool, task: &TaskDao) -> Result<(), anyhow::Error> {
+    pub async fn update_task(pool: &MySqlPool, task: &SyncTaskDao) -> Result<(), anyhow::Error> {
         sqlx::query!(
             r#"
-            UPDATE task SET
+            UPDATE sync_task SET
                 task_name = ?,
                 from_datasource_id = ?,
                 to_datasource_id = ?,
@@ -122,7 +122,7 @@ impl TaskDao {
     pub async fn delete_task(pool: &MySqlPool, task_id: i32) -> Result<(), anyhow::Error> {
         sqlx::query!(
             r#"
-            DELETE FROM task WHERE id = ?
+            DELETE FROM sync_task WHERE id = ?
             "#,
             task_id
         )
