@@ -1,9 +1,11 @@
+use crate::util;
 use serde::Serialize;
 use sqlx::mysql::MySqlPool;
 use sqlx::types::chrono::DateTime;
 use sqlx::types::chrono::Utc;
 use sqlx::Error;
 use sqlx::FromRow;
+
 #[derive(Debug, FromRow, Serialize)]
 pub struct DataSourceDao {
     pub id: i32,
@@ -11,6 +13,7 @@ pub struct DataSourceDao {
     pub datasource_url: String,
     pub host: String,
     pub port: i32,
+    #[serde(with = "util")]
     pub timestamp: DateTime<Utc>,
 }
 

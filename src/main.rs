@@ -7,7 +7,8 @@ use moka::future::Cache;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
 use mysql_async::binlog::value::BinlogValue;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
-use service::audit_service::create_audit_task;
+use service::audit_task_service::{create_audit_task, execute_audit_task, get_audit_tasks};
+use service::audit_task_result_service::get_audit_tasks_result;
 use service::database_service::get_database_list;
 use service::datasource_service::{create_datasource, get_datasource_list};
 mod common;
@@ -177,7 +178,9 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
         .route("/datasource/:id/database/:name/tables", get(get_table_list))
         .route("/datasource/:id", get(get_database_list))
         .route("/task", post(create_task).get(get_task_list))
-        .route("/audit", post(create_audit_task))
+        .route("/auditTask", post(create_audit_task).get(get_audit_tasks))
+        .route("/auditTask/execute", post(execute_audit_task))
+        .route("/auditTaskResult", get(get_audit_tasks_result))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();

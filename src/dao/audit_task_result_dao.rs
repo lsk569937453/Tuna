@@ -1,6 +1,8 @@
+use crate::util;
 use serde::{Deserialize, Serialize};
 use sqlx::types::chrono::DateTime;
 use sqlx::types::chrono::Utc;
+
 use sqlx::{Error, MySql, MySqlPool};
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AuditTaskResultDao {
@@ -8,6 +10,7 @@ pub struct AuditTaskResultDao {
     pub audit_task_id: i32,
     pub left_compare: Option<String>,
     pub right_compare: Option<String>,
+    #[serde(with = "util")]
     pub timestamp: DateTime<Utc>,
 }
 
@@ -98,5 +101,17 @@ impl AuditTaskResultDao {
         .await?;
 
         Ok(())
+    }
+    pub async fn fetch_all_audit_tasks_result(
+        pool: &MySqlPool,
+    ) -> Result<Vec<AuditTaskResultDao>, Error> {
+        let datasources = sqlx::query_as!(
+            AuditTaskResultDao,
+            "SELECT * FROM audit_task_result order by id desc"
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(datasources)
     }
 }

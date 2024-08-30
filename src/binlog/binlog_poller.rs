@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::vojo::create_task_req::TableMappingItem;
+use crate::vojo::create_audit_task_req::TableMappingItem;
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use futures::StreamExt;
