@@ -1,6 +1,6 @@
 use crate::util;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::types::chrono::DateTime;
 #[derive(Serialize, Clone)]
 pub struct GetDatasourceListResponse {

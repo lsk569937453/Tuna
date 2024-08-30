@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use mysql_async::binlog::jsonb::Array;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Clone)]
