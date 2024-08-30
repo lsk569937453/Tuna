@@ -6,7 +6,7 @@ use sqlx::types::chrono::Utc;
 use sqlx::Error;
 use sqlx::FromRow;
 
-use crate::vojo::create_task_req::CreateTaskReq;
+use crate::vojo::create_audit_task_req::CreateTaskReq;
 #[derive(Debug, FromRow, Serialize, Clone)]
 pub struct SyncTaskDao {
     pub id: i32,
@@ -59,7 +59,10 @@ impl SyncTaskDao {
         Ok(())
     }
 
-    pub async fn get_task(pool: &MySqlPool, task_id: i32) -> Result<SyncTaskDao, anyhow::Error> {
+    pub async fn get_task(
+        pool: &MySqlPool,
+        task_id: i32,
+    ) -> Result<Option<SyncTaskDao>, anyhow::Error> {
         let task = sqlx::query_as!(
             SyncTaskDao,
             r#"
@@ -79,7 +82,7 @@ impl SyncTaskDao {
             "#,
             task_id
         )
-        .fetch_one(pool)
+        .fetch_optional(pool)
         .await?;
 
         Ok(task)

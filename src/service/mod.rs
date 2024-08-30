@@ -1,4 +1,5 @@
-pub mod audit_service;
+pub mod audit_task_result_service;
+pub mod audit_task_service;
 pub mod database_service;
 pub mod datasource_service;
 pub mod table_service;

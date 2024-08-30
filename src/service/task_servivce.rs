@@ -2,7 +2,7 @@ use crate::dao::datasource_dao::DataSourceDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
-use crate::vojo::create_task_req::CreateTaskReq;
+use crate::vojo::create_audit_task_req::CreateTaskReq;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
