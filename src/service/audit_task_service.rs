@@ -20,7 +20,6 @@ use sqlx::Row;
 use sqlx::TypeInfo;
 use sqlx::ValueRef;
 use sqlx::{MySql, Pool};
-use std::clone;
 use std::collections::HashMap;
 use std::collections::LinkedList;
 use std::convert::Infallible;
@@ -35,7 +34,7 @@ async fn create_audit_task_with_error(
     pool: Pool<MySql>,
     audit_task_req: AuditTaskReq,
 ) -> Result<String, anyhow::Error> {
-    SyncTaskDao::get_task(&pool, audit_task_req.task_id).await;
+    SyncTaskDao::get_task(&pool, audit_task_req.task_id).await?;
     let id = AuditTaskDao::create_auit_task(&pool, audit_task_req.task_id).await?;
     let data = BaseResponse {
         response_code: 0,

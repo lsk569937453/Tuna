@@ -484,9 +484,6 @@ async fn parse_delete_sql(
                 (Some(r1), Some(r2)) => {
                     info!("r1:{:?},r2:{:?}", r1, r2);
                 }
-                (Some(r1), None) => {
-                    info!("r1:{:?},", r1);
-                }
 
                 _ => {}
             },
@@ -551,10 +548,6 @@ pub fn parse_column(
         }
         None => Ok(res),
     }
-}
-// src/lib.rs
-pub fn add(a: i32, b: i32) -> i32 {
-    a + b
 }
 
 #[cfg(test)]

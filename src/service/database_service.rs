@@ -1,23 +1,17 @@
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
-use crate::vojo::create_datasource_req;
-use crate::vojo::create_datasource_req::CreateDatasourceReq;
+
 use axum::extract::Path;
 use axum::extract::State;
-use axum::http::header;
 use axum::response::IntoResponse;
 use axum::response::Response;
-use axum::Json;
-use clap::builder::Str;
-use sqlx::mysql::MySqlConnectOptions;
+
 use sqlx::mysql::MySqlRow;
 use sqlx::Connection;
 use sqlx::MySqlConnection;
-use sqlx::MySqlPool;
 use sqlx::Row;
 use sqlx::{MySql, Pool};
 use std::convert::Infallible;
-use std::str::FromStr;
 pub async fn get_database_list(
     State(state): State<Pool<MySql>>,
     Path(data): Path<i32>,

@@ -1,10 +1,7 @@
-use rand::thread_rng;
-use rand::RngCore;
 use redis::ExistenceCheck;
 use redis::RedisResult;
 use redis::Value;
 use redis::{cluster_async::ClusterConnection, AsyncCommands, SetOptions};
-use std::io;
 use std::time::Duration;
 use uuid::Uuid;
 const UNLOCK_SCRIPT: &str = r#"
