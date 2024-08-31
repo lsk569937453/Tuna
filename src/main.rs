@@ -7,10 +7,12 @@ use moka::future::Cache;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
 use mysql_async::binlog::value::BinlogValue;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
-use service::audit_task_service::{create_audit_task, execute_audit_task, get_audit_tasks};
 use service::audit_task_result_service::get_audit_tasks_result;
+use service::audit_task_service::{create_audit_task, execute_audit_task, get_audit_tasks};
 use service::database_service::get_database_list;
-use service::datasource_service::{create_datasource, get_datasource_list};
+use service::datasource_service::{
+    create_datasource, delete_datasource_by_id, get_datasource_list,
+};
 mod common;
 mod dao;
 use service::table_service::get_table_list;
@@ -176,7 +178,10 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
             post(create_datasource).get(get_datasource_list),
         )
         .route("/datasource/:id/database/:name/tables", get(get_table_list))
-        .route("/datasource/:id", get(get_database_list))
+        .route(
+            "/datasource/:id",
+            get(get_database_list).delete(delete_datasource_by_id),
+        )
         .route("/task", post(create_task).get(get_task_list))
         .route("/auditTask", post(create_audit_task).get(get_audit_tasks))
         .route("/auditTask/execute", post(execute_audit_task))
