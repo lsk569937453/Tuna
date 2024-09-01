@@ -2,6 +2,7 @@ use crate::dao::datasource_dao::DataSourceDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::create_datasource_req::CreateDatasourceReq;
+use axum::extract::Path;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -43,6 +44,23 @@ pub async fn get_datasource_list(State(state): State<Pool<MySql>>) -> Result<Res
 }
 async fn get_datasource_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
     let redis_util = DataSourceDao::fetch_all_datasources(&pool).await?;
+    let data = BaseResponse {
+        response_code: 0,
+        response_object: redis_util,
+    };
+    serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
+}
+pub async fn delete_datasource_by_id(
+    State(state): State<Pool<MySql>>,
+    Path(data): Path<i32>,
+) -> Result<Response, Infallible> {
+    handle_response!(delete_datasource_by_id_with_error(state, data).await)
+}
+async fn delete_datasource_by_id_with_error(
+    pool: Pool<MySql>,
+    id: i32,
+) -> Result<String, anyhow::Error> {
+    let redis_util = DataSourceDao::delete(&pool, id).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: redis_util,

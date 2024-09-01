@@ -11,7 +11,7 @@ import { ToastContainer, toast } from 'react-toastify';
 
 const pageSize = 5;
 
-function AuditPage() {
+function AuditResultPage() {
 
     const [openModal, setOpenModal] = useState(false);
     const [datasourceName, setDatasourceName] = useState("");
@@ -197,4 +197,4 @@ function AuditPage() {
     );
 }
 
-export default AuditPage;
+export default AuditResultPage;

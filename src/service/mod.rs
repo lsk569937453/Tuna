@@ -2,8 +2,8 @@ pub mod audit_task_result_service;
 pub mod audit_task_service;
 pub mod database_service;
 pub mod datasource_service;
+pub mod sync_task_servivce;
 pub mod table_service;
-pub mod task_servivce;
 #[macro_export]
 macro_rules! handle_response {
     ($result:expr) => {
