@@ -6,6 +6,7 @@ use crate::vojo::audit_task_req::AuditTaskReq;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::create_audit_task_req::TableMappingItem;
 use crate::vojo::id_req::IdReq;
+use axum::extract::Path;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -36,9 +37,10 @@ async fn create_audit_task_with_error(
 ) -> Result<String, anyhow::Error> {
     SyncTaskDao::get_task(&pool, audit_task_req.task_id).await?;
     let id = AuditTaskDao::create_auit_task(&pool, audit_task_req.task_id).await?;
+    let json_res = json!({ "id": id });
     let data = BaseResponse {
         response_code: 0,
-        response_object: id,
+        response_object: json_res,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
@@ -289,14 +291,20 @@ async fn parse_value<'r>(raw_value: MySqlValueRef<'r>) -> Value {
             .into(),
     }
 }
-pub async fn get_task_list(State(state): State<Pool<MySql>>) -> Result<Response, Infallible> {
-    handle_response!(get_task_list_with_error(state).await)
+pub async fn delete_audit_task_by_id(
+    State(state): State<Pool<MySql>>,
+    Path(data): Path<i32>,
+) -> Result<Response, Infallible> {
+    handle_response!(delete_audit_task_by_id_with_error(state, data).await)
 }
-async fn get_task_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let res: Vec<SyncTaskDao> = SyncTaskDao::fetch_all_tasks(&pool).await?;
+async fn delete_audit_task_by_id_with_error(
+    pool: Pool<MySql>,
+    id: i32,
+) -> Result<String, anyhow::Error> {
+    let redis_util = AuditTaskDao::delete_audit_task(&pool, id).await?;
     let data = BaseResponse {
         response_code: 0,
-        response_object: res,
+        response_object: redis_util,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }

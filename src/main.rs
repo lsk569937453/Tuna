@@ -8,15 +8,17 @@ use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
 use mysql_async::binlog::value::BinlogValue;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::audit_task_result_service::get_audit_tasks_result;
-use service::audit_task_service::{create_audit_task, execute_audit_task, get_audit_tasks};
+use service::audit_task_service::{
+    create_audit_task, delete_audit_task_by_id, execute_audit_task, get_audit_tasks,
+};
 use service::database_service::get_database_list;
 use service::datasource_service::{
     create_datasource, delete_datasource_by_id, get_datasource_list,
 };
 mod common;
 mod dao;
+use service::sync_task_servivce::{create_task, delete_sync_task_by_id, get_task_list};
 use service::table_service::get_table_list;
-use service::task_servivce::{create_task, get_task_list};
 use tracing_subscriber::fmt::Layer as FmtLayer;
 mod binlog;
 use crate::common::init::init_with_error;
@@ -25,8 +27,8 @@ mod service;
 use tracing_subscriber::Layer;
 mod util;
 mod vojo;
-use axum::routing::get;
 use axum::routing::post;
+use axum::routing::{delete, get};
 use axum::Router;
 
 use crate::init_redis::init_redis;
@@ -45,6 +47,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 extern crate tracing;
 #[macro_use]
 extern crate anyhow;
+#[macro_use]
+extern crate serde_json;
 #[derive(Parser)]
 #[command(author, version, about, long_about)]
 struct Cli {
@@ -183,7 +187,9 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
             get(get_database_list).delete(delete_datasource_by_id),
         )
         .route("/task", post(create_task).get(get_task_list))
+        .route("/syncTask/:id", delete(delete_sync_task_by_id))
         .route("/auditTask", post(create_audit_task).get(get_audit_tasks))
+        .route("/auditTask/:id", delete(delete_audit_task_by_id))
         .route("/auditTask/execute", post(execute_audit_task))
         .route("/auditTaskResult", get(get_audit_tasks_result))
         .with_state(db_pool);

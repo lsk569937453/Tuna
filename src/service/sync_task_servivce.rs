@@ -3,6 +3,7 @@ use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::create_audit_task_req::CreateTaskReq;
+use axum::extract::Path;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -45,6 +46,23 @@ async fn get_task_list_with_error(pool: Pool<MySql>) -> Result<String, anyhow::E
     let data = BaseResponse {
         response_code: 0,
         response_object: res,
+    };
+    serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
+}
+pub async fn delete_sync_task_by_id(
+    State(state): State<Pool<MySql>>,
+    Path(data): Path<i32>,
+) -> Result<Response, Infallible> {
+    handle_response!(delete_sync_task_by_id_with_error(state, data).await)
+}
+async fn delete_sync_task_by_id_with_error(
+    pool: Pool<MySql>,
+    id: i32,
+) -> Result<String, anyhow::Error> {
+    let redis_util = SyncTaskDao::delete_task(&pool, id).await?;
+    let data = BaseResponse {
+        response_code: 0,
+        response_object: redis_util,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }

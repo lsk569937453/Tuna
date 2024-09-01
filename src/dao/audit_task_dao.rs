@@ -86,8 +86,8 @@ impl AuditTaskDao {
         Ok(())
     }
 
-    pub async fn delete_audit_task(pool: &MySqlPool, id: i32) -> Result<(), Error> {
-        sqlx::query!(
+    pub async fn delete_audit_task(pool: &MySqlPool, id: i32) -> Result<u64, Error> {
+        let res = sqlx::query!(
             r#"
             DELETE FROM audit_task WHERE id = ?
             "#,
@@ -96,6 +96,6 @@ impl AuditTaskDao {
         .execute(pool)
         .await?;
 
-        Ok(())
+        Ok(res.rows_affected())
     }
 }

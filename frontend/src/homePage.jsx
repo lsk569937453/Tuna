@@ -11,7 +11,7 @@ import { CookiesProvider, useCookies } from 'react-cookie'
 import { useNavigate, NavLink } from "react-router-dom";
 import 'moment/dist/locale/zh-cn';
 import AuditPage from "./auditPage";
-
+import AuditResultPage from "./auditResultPage";
 const customTheme = {
     root: {
         base: 'inherit',
@@ -83,6 +83,12 @@ function HomePage() {
                                     </Sidebar.Item>
                                 </Link>
 
+                                <Link to="/auditResultPage" >
+                                    <Sidebar.Item icon={HiChip} >
+                                        稽核结果
+                                    </Sidebar.Item>
+                                </Link>
+
                             </Sidebar.ItemGroup>
                         </Sidebar.Items>
                     </Sidebar>
@@ -99,6 +105,7 @@ function HomePage() {
 
                             <Route path="taskPage" element={<TaskPage />} />
                             <Route path="auditPage" element={<AuditPage />} />
+                            <Route path="auditResultPage" element={<AuditResultPage />} />
 
 
                         </Route>
