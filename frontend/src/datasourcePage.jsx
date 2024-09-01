@@ -29,6 +29,7 @@ function DatasourcePage() {
             console.log(res);
             const mesArray = res.data.message.map(
                 ({
+                    id: id,
                     datasource_name: datasourceName,
                     datasource_url: datasourceUrl,
                     addr: addr,
@@ -36,6 +37,7 @@ function DatasourcePage() {
 
                 }) => {
                     return {
+                        id,
                         datasourceName,
                         datasourceUrl,
                         addr,
@@ -46,7 +48,20 @@ function DatasourcePage() {
             setDatasourceTableData(mesArray);
         });
     };
+    const deleteDatasource = (id) => {
+        Request.delete("/api/datasource/" + id).then((res) => {
+            console.log(res);
+            if (res.data.resCode != 0) {
+                // this.$message.error('添加错误:' + res.data.message);
+                toast.error("删除任务出错!", {
+                    position: "top-center"
+                });
+            } else {
+            }
+            window.location.reload();
 
+        })
+    }
     const addDatasource = () => {
         Request.post("/api/datasource", {
             "datasource_name": datasourceName,
@@ -130,7 +145,8 @@ function DatasourcePage() {
                                 <Table.Cell className="text-center">  {row.datasourceUrl}</Table.Cell>
 
                                 <Table.Cell className="text-center">
-                                    <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500">
+                                    <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
+                                        onClick={() => deleteDatasource(row.id)}>
                                         删除
                                     </a>
                                 </Table.Cell>

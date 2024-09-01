@@ -29,6 +29,7 @@ function TaskPage() {
             console.log(res);
             const mesArray = res.data.message.map(
                 ({
+                    id: id,
                     task_name: taskName,
                     from_datasource_url: fromDatasourceUrl,
                     to_datasource_url: toDatasourceUrl,
@@ -39,6 +40,7 @@ function TaskPage() {
 
                 }) => {
                     return {
+                        id,
                         taskName,
                         fromDatasourceUrl,
                         toDatasourceUrl,
@@ -53,7 +55,20 @@ function TaskPage() {
             setTaskTableData(mesArray);
         });
     };
+    const deleteSyncTask = (id) => {
+        Request.delete("/api/syncTask/" + id).then((res) => {
+            console.log(res);
+            if (res.data.resCode != 0) {
+                // this.$message.error('添加错误:' + res.data.message);
+                toast.error("删除任务出错!", {
+                    position: "top-center"
+                });
+            } else {
+            }
+            window.location.reload();
 
+        })
+    }
     const addDatasource = () => {
         Request.post("/api/datasource", {
             "datasource_name": datasourceName,
@@ -139,7 +154,8 @@ function TaskPage() {
                                 <Table.Cell className="text-center">  {row.toDatabaseName}</Table.Cell>
 
                                 <Table.Cell className="text-center">
-                                    <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500">
+                                    <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
+                                        onClick={() => deleteTask(row.id)}>
                                         删除
                                     </a>
                                 </Table.Cell>
