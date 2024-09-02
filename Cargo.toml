@@ -41,3 +41,4 @@ mysql_common = "0.32.4"
 redis = { version = "0.26.1", features = ["cluster-async", "tokio-comp"] }
 sqlparser = "0.50.0"
 rs-snowflake = "0.6.0"
+local-ip-address = "0.6.2"

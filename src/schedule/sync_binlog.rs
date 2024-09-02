@@ -1,16 +1,18 @@
+use crate::binlog::binlog_poller::BinlogPoller;
+use crate::common::app_state;
+use crate::common::app_state::AppState;
+use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
-
-use crate::binlog::binlog_poller::BinlogPoller;
 use sqlx::MySql;
 use sqlx::Pool;
 use std::time::Duration;
 use tokio::time::interval;
-#[instrument(name = "sync binlog", skip(cluster_connection, pool))]
+#[instrument(name = "sync binlog", skip(cluster_connection, app_state))]
 pub async fn sync_binlog_with_error(
     cluster_connection: &mut ClusterConnection,
-    pool: Pool<MySql>,
+    app_state: AppState,
     task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
     let duration = 5000;
@@ -35,7 +37,7 @@ async fn send_heartbeat_with_error(
     cluster_connection: &mut ClusterConnection,
     task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
-    let task_info_key = format!("tuna:task:{}", task_dao.id);
+    let task_info_key = format!("{}{}", TASK_INFO_KEY_TEMPLATE, task_dao.id);
     cluster_connection
         .pexpire(task_info_key.clone(), 10000)
         .await?;

@@ -1,3 +1,5 @@
+use crate::common::app_state;
+use crate::common::app_state::AppState;
 use crate::dao::audit_task_dao::AuditTaskDao;
 use crate::dao::audit_task_result_dao::AuditTaskResultDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
@@ -26,17 +28,17 @@ use std::collections::LinkedList;
 use std::convert::Infallible;
 
 pub async fn create_audit_task(
-    State(state): State<Pool<MySql>>,
+    State(state): State<AppState>,
     Json(data): Json<AuditTaskReq>,
 ) -> Result<Response, Infallible> {
     handle_response!(create_audit_task_with_error(state, data).await)
 }
 async fn create_audit_task_with_error(
-    pool: Pool<MySql>,
+    app_state: AppState,
     audit_task_req: AuditTaskReq,
 ) -> Result<String, anyhow::Error> {
-    SyncTaskDao::get_task(&pool, audit_task_req.task_id).await?;
-    let id = AuditTaskDao::create_auit_task(&pool, audit_task_req.task_id).await?;
+    SyncTaskDao::get_task(&app_state.db_pool, audit_task_req.task_id).await?;
+    let id = AuditTaskDao::create_auit_task(&app_state.db_pool, audit_task_req.task_id).await?;
     let json_res = json!({ "id": id });
     let data = BaseResponse {
         response_code: 0,
@@ -44,11 +46,11 @@ async fn create_audit_task_with_error(
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
-pub async fn get_audit_tasks(State(state): State<Pool<MySql>>) -> Result<Response, Infallible> {
+pub async fn get_audit_tasks(State(state): State<AppState>) -> Result<Response, Infallible> {
     handle_response!(get_audit_tasks_with_error(state).await)
 }
-async fn get_audit_tasks_with_error(pool: Pool<MySql>) -> Result<String, anyhow::Error> {
-    let audit_tasks = AuditTaskDao::fetch_all_audit_tasks(&pool).await?;
+async fn get_audit_tasks_with_error(app_state: AppState) -> Result<String, anyhow::Error> {
+    let audit_tasks = AuditTaskDao::fetch_all_audit_tasks(&app_state.db_pool).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: audit_tasks,
@@ -56,16 +58,16 @@ async fn get_audit_tasks_with_error(pool: Pool<MySql>) -> Result<String, anyhow:
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
 pub async fn execute_audit_task(
-    State(state): State<Pool<MySql>>,
+    State(state): State<AppState>,
     Json(data): Json<IdReq>,
 ) -> Result<Response, Infallible> {
     handle_response!(execute_audit_task_with_error(state, data).await)
 }
 async fn execute_audit_task_with_error(
-    pool: Pool<MySql>,
+    app_state: AppState,
     id_req: IdReq,
 ) -> Result<String, anyhow::Error> {
-    let current_audit_task = AuditTaskDao::get_auit_task_by_id(&pool, id_req.id)
+    let current_audit_task = AuditTaskDao::get_auit_task_by_id(&app_state.db_pool, id_req.id)
         .await?
         .ok_or(anyhow!("Can't find audit task by id {}", id_req.id))?;
     if current_audit_task.status == 1 {
@@ -76,19 +78,21 @@ async fn execute_audit_task_with_error(
         };
         return serde_json::to_string(&data).map_err(|e| anyhow!("{}", e));
     }
-    AuditTaskDao::update_auit_task_status(&pool, id_req.id, 1).await?;
+    AuditTaskDao::update_auit_task_status(&app_state.db_pool, id_req.id, 1).await?;
     let task_id = id_req.id;
     let audit_task_id = current_audit_task.id;
     tokio::spawn(async move {
         if let Err(e) =
-            async_execute_audit_task_with_error(pool.clone(), task_id, audit_task_id).await
+            async_execute_audit_task_with_error(app_state.clone(), task_id, audit_task_id).await
         {
             error!(
                 "async execute audit task {} error,error is {}",
                 id_req.id, e
             );
         }
-        if let Err(e) = AuditTaskDao::update_auit_task_status(&pool, id_req.id, 2).await {
+        if let Err(e) =
+            AuditTaskDao::update_auit_task_status(&app_state.db_pool, id_req.id, 2).await
+        {
             error!(
                 "async execute audit task {} error,error is {}",
                 id_req.id, e
@@ -103,19 +107,19 @@ async fn execute_audit_task_with_error(
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
 async fn async_execute_audit_task_with_error(
-    pool: Pool<MySql>,
+    app_state: AppState,
     task_id: i32,
     audit_task_id: i32,
 ) -> Result<(), anyhow::Error> {
     info!("start execute audit task {}", task_id);
-    let sync_task_dao = SyncTaskDao::get_task(&pool, task_id)
+    let sync_task_dao = SyncTaskDao::get_task(&app_state.db_pool, task_id)
         .await?
         .ok_or(anyhow!("Can't find sync task by id {}", task_id))?;
     let table_mapping = sync_task_dao.table_mapping.clone();
     let table_mapping: HashMap<String, TableMappingItem> = serde_json::from_str(&table_mapping)?;
     for (_, table_mapping_item) in table_mapping.iter() {
         do_execute(
-            pool.clone(),
+            app_state.clone(),
             table_mapping_item.clone(),
             sync_task_dao.clone(),
             audit_task_id,
@@ -126,7 +130,7 @@ async fn async_execute_audit_task_with_error(
     Ok(())
 }
 async fn do_execute(
-    pool: Pool<MySql>,
+    app_state: AppState,
     table_mapping_item: TableMappingItem,
     sync_task_dao: SyncTaskDao,
     audit_task_id: i32,
@@ -159,7 +163,7 @@ async fn do_execute(
     .await?;
 
     AuditTaskResultDao::create_task_result(
-        &pool,
+        &app_state.db_pool,
         audit_task_id,
         Some(left_compare),
         Some(right_compare),
@@ -292,16 +296,16 @@ async fn parse_value<'r>(raw_value: MySqlValueRef<'r>) -> Value {
     }
 }
 pub async fn delete_audit_task_by_id(
-    State(state): State<Pool<MySql>>,
+    State(state): State<AppState>,
     Path(data): Path<i32>,
 ) -> Result<Response, Infallible> {
     handle_response!(delete_audit_task_by_id_with_error(state, data).await)
 }
 async fn delete_audit_task_by_id_with_error(
-    pool: Pool<MySql>,
+    app_state: AppState,
     id: i32,
 ) -> Result<String, anyhow::Error> {
-    let redis_util = AuditTaskDao::delete_audit_task(&pool, id).await?;
+    let redis_util = AuditTaskDao::delete_audit_task(&app_state.db_pool, id).await?;
     let data = BaseResponse {
         response_code: 0,
         response_object: redis_util,

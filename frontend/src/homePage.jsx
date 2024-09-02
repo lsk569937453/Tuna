@@ -33,17 +33,17 @@ function HomePage() {
     //     }
     // }, []);
 
-    useEffect(() => {
-        let currentdate = moment().format('dddd YYYY/MM/DD, HH:mm:ss');
-        setCurrentDate(currentdate);
-        const interval = setInterval(() => {
-            console.log(moment.locale());
-            let currentdate = moment().format('dddd YYYY/MM/DD, HH:mm:ss');
-            setCurrentDate(currentdate);
+    // useEffect(() => {
+    //     let currentdate = moment().format('dddd YYYY/MM/DD, HH:mm:ss');
+    //     setCurrentDate(currentdate);
+    //     const interval = setInterval(() => {
+    //         console.log(moment.locale());
+    //         let currentdate = moment().format('dddd YYYY/MM/DD, HH:mm:ss');
+    //         setCurrentDate(currentdate);
 
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
+    //     }, 1000);
+    //     return () => clearInterval(interval);
+    // }, []);
 
 
     const clearCookie = () => {

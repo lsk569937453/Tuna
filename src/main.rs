@@ -17,7 +17,9 @@ use service::datasource_service::{
 };
 mod common;
 mod dao;
-use service::sync_task_servivce::{create_task, delete_sync_task_by_id, get_task_list};
+use service::sync_task_servivce::{
+    create_task, delete_sync_task_by_id, get_sync_task_status_by_id, get_task_list,
+};
 use service::table_service::get_table_list;
 use tracing_subscriber::fmt::Layer as FmtLayer;
 mod binlog;
@@ -31,6 +33,7 @@ use axum::routing::post;
 use axum::routing::{delete, get};
 use axum::Router;
 
+use crate::common::app_state::AppState;
 use crate::init_redis::init_redis;
 use chrono::FixedOffset;
 use chrono::Utc;
@@ -39,6 +42,7 @@ use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::{Connection, Row};
+use std::sync::Arc;
 use std::vec;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -177,12 +181,17 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     let _work_guard = setup_logger()?;
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
-    let cloned_db_pool = db_pool.clone();
     let redis_client = init_redis().await?;
-    tokio::spawn(async move {
-        record_error!(main_sync_redis_loop_with_error(redis_client, cloned_db_pool).await);
-    });
 
+    // Combine them into a single shared state
+    let shared_state = AppState {
+        db_pool: db_pool,
+        redis_client: redis_client,
+    };
+    let cloned_shared_state = shared_state.clone();
+    tokio::spawn(async move {
+        record_error!(main_sync_redis_loop_with_error(shared_state).await);
+    });
     let app = Router::new()
         .route(
             "/datasource",
@@ -194,12 +203,13 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
             get(get_database_list).delete(delete_datasource_by_id),
         )
         .route("/task", post(create_task).get(get_task_list))
+        .route("/syncTask/status/:id", get(get_sync_task_status_by_id))
         .route("/syncTask/:id", delete(delete_sync_task_by_id))
         .route("/auditTask", post(create_audit_task).get(get_audit_tasks))
         .route("/auditTask/:id", delete(delete_audit_task_by_id))
         .route("/auditTask/execute", post(execute_audit_task))
         .route("/auditTaskResult", get(get_audit_tasks_result))
-        .with_state(db_pool);
+        .with_state(cloned_shared_state);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await?;
     axum::serve(listener, final_route).await?;
