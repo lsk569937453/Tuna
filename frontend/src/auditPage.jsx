@@ -14,8 +14,7 @@ const pageSize = 5;
 function AuditPage() {
 
     const [openModal, setOpenModal] = useState(false);
-    const [datasourceName, setDatasourceName] = useState("");
-    const [datasourceUrl, setDatasourceUrl] = useState("");
+    const [taskId, setTaskId] = useState("");
     //0代表插入，1代表更新
     const [modalType, setModalType] = useState(0);
     const [taskTableData, setTaskTableData] = useState([]);
@@ -50,10 +49,9 @@ function AuditPage() {
         });
     };
 
-    const addDatasource = () => {
-        Request.post("/api/datasource", {
-            "datasource_name": datasourceName,
-            "datasource_url": datasourceUrl,
+    const addAuditTask = () => {
+        Request.post("/api/auditTask", {
+            "task_id": Number(taskId),
 
         }).then((res) => {
 
@@ -127,26 +125,19 @@ function AuditPage() {
                     <Modal dismissible show={openModal} onClose={() => setOpenModal(false)} >
                         <div className="flex flex-col items-center gap-4 p-5 ">
                             <div className="flex items-center w-full">
-                                <span className="mr-2 basis-1/3 text-right	">数据源名称:</span>
+                                <span className="mr-2 basis-1/3 text-right	">任务Id:</span>
                                 <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源名称" required
-                                    onChange={(e) => setDatasourceName(e.target.value)}
-                                    value={datasourceName}
+                                    onChange={(e) => setTaskId(e.target.value)}
+                                    value={taskId}
                                 />
                             </div>
-                            <div className="flex items-center   w-full">
-                                <span className="mr-2 basis-1/3 text-right	">数据源地址:</span>
-                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
-                                    onChange={(e) => setDatasourceUrl(e.target.value)}
-                                    value={datasourceUrl}
 
-                                />
-                            </div>
 
                             <div className="flex items-center  w-full">
                                 <div className="mr-2  basis-1/3">
                                 </div>
                                 {modalType == 0 &&
-                                    <Button className="basis-1/3" onClick={addDatasource}>添加</Button>}
+                                    <Button className="basis-1/3" onClick={addAuditTask}>添加</Button>}
                                 {modalType == 1 &&
                                     <Button className="basis-1/3" onClick={confirmEditFurnace}>更新</Button>}
                             </div>

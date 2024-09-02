@@ -14,8 +14,13 @@ const pageSize = 5;
 function TaskPage() {
 
     const [openModal, setOpenModal] = useState(false);
-    const [datasourceName, setDatasourceName] = useState("");
-    const [datasourceUrl, setDatasourceUrl] = useState("");
+    const [taskName, setTaskName] = useState("");
+    const [fromDatasourceName, setFromDatasourceName] = useState("");
+    const [toDatasourceName, setToDatasourceName] = useState("");
+    const [fromDatabaseName, setFromDatabaseName] = useState("");
+    const [toDatabaseName, setToDatabaseName] = useState("");
+
+    const [tableMapping, setTableMapping] = useState("");
     //0代表插入，1代表更新
     const [modalType, setModalType] = useState(0);
     const [taskTableData, setTaskTableData] = useState([]);
@@ -69,10 +74,14 @@ function TaskPage() {
 
         })
     }
-    const addDatasource = () => {
-        Request.post("/api/datasource", {
-            "datasource_name": datasourceName,
-            "datasource_url": datasourceUrl,
+    const addAsyncTask = () => {
+        Request.post("/api/task", {
+            "task_name": taskName,
+            "from_datasource_id": Number(fromDatasourceName),
+            "from_database_name": fromDatabaseName,
+            "to_datasource_id": Number(toDatasourceName),
+            "to_database_name": toDatabaseName,
+            "table_mapping": JSON.parse(tableMapping)
 
         }).then((res) => {
 
@@ -106,26 +115,57 @@ function TaskPage() {
                     <Modal dismissible show={openModal} onClose={() => setOpenModal(false)} >
                         <div className="flex flex-col items-center gap-4 p-5 ">
                             <div className="flex items-center w-full">
-                                <span className="mr-2 basis-1/3 text-right	">数据源名称:</span>
+                                <span className="mr-2 basis-1/3 text-right	">任务名称:</span>
                                 <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源名称" required
-                                    onChange={(e) => setDatasourceName(e.target.value)}
-                                    value={datasourceName}
+                                    onChange={(e) => setTaskName(e.target.value)}
+                                    value={taskName}
                                 />
                             </div>
                             <div className="flex items-center   w-full">
-                                <span className="mr-2 basis-1/3 text-right	">数据源地址:</span>
+                                <span className="mr-2 basis-1/3 text-right	">源数据源名称:</span>
                                 <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
-                                    onChange={(e) => setDatasourceUrl(e.target.value)}
-                                    value={datasourceUrl}
+                                    onChange={(e) => setFromDatasourceName(e.target.value)}
+                                    value={fromDatasourceName}
 
                                 />
                             </div>
+                            <div className="flex items-center   w-full">
+                                <span className="mr-2 basis-1/3 text-right	">源数据库名称:</span>
+                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
+                                    onChange={(e) => setFromDatabaseName(e.target.value)}
+                                    value={fromDatabaseName}
 
+                                />
+                            </div>
+                            <div className="flex items-center   w-full">
+                                <span className="mr-2 basis-1/3 text-right	">目标数据源名称:</span>
+                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
+                                    onChange={(e) => setToDatasourceName(e.target.value)}
+                                    value={toDatasourceName}
+
+                                />
+                            </div>
+                            <div className="flex items-center   w-full">
+                                <span className="mr-2 basis-1/3 text-right	">目标数据库名称:</span>
+                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
+                                    onChange={(e) => setToDatabaseName(e.target.value)}
+                                    value={toDatabaseName}
+
+                                />
+                            </div>
+                            <div className="flex items-center   w-full">
+                                <span className="mr-2 basis-1/3 text-right	">mapping关系:</span>
+                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
+                                    onChange={(e) => setTableMapping(e.target.value)}
+                                    value={tableMapping}
+
+                                />
+                            </div>
                             <div className="flex items-center  w-full">
                                 <div className="mr-2  basis-1/3">
                                 </div>
                                 {modalType == 0 &&
-                                    <Button className="basis-1/3" onClick={addDatasource}>添加</Button>}
+                                    <Button className="basis-1/3" onClick={addAsyncTask}>添加</Button>}
                                 {modalType == 1 &&
                                     <Button className="basis-1/3" onClick={confirmEditFurnace}>更新</Button>}
                             </div>
@@ -155,7 +195,7 @@ function TaskPage() {
 
                                 <Table.Cell className="text-center">
                                     <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
-                                        onClick={() => deleteTask(row.id)}>
+                                        onClick={() => deleteSyncTask(row.id)}>
                                         删除
                                     </a>
                                 </Table.Cell>

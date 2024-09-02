@@ -75,18 +75,6 @@ async fn create_data() -> Result<(), anyhow::Error> {
         let i_next_str = (i + 1).to_string();
         let id = id_generator_generator.real_time_generate();
 
-        // sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
-        //     .bind(i_str.clone())
-        //     .bind(i_str.clone())
-        //     .bind(i_str.clone())
-        //     .execute(&pool)
-        //     .await?;
-        // sqlx::query("update user set first_name = ? where username=?")
-        //     .bind(i_next_str)
-        //     .bind(i_str.clone())
-        //     .execute(&pool)
-        //     .await?;
-        // sqlx::query("delete from user").execute(&pool).await?;
         sqlx::query(
             "INSERT INTO `all_types_table` (
     `tiny_int_col`,
@@ -194,7 +182,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
         .route("/auditTaskResult", get(get_audit_tasks_result))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
-    axum::serve(listener, final_route).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await?;
+    axum::serve(listener, final_route).await?;
     Ok(())
 }
