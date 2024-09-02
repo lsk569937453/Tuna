@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use crate::common::common_constants::TASK_GID_KEY_TEMPLATE;
 use crate::vojo::create_audit_task_req::TableMappingItem;
 use anyhow::anyhow;
-use chrono::NaiveDateTime;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::EventData;
@@ -41,6 +41,7 @@ pub struct BinlogPoller {
     table_mapping_hash_map: HashMap<String, TableMappingItem>,
     to_database_name: String,
     to_mysql_connection: Conn,
+    gtid_from_binlog: String,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -58,14 +59,14 @@ impl BinlogPoller {
         mut cluster_connection: ClusterConnection,
         task_dao: SyncTaskDao,
     ) -> Result<Option<Vec<String>>, anyhow::Error> {
-        let gtid_set_key = format!("tuna:task:{}:gtid_set", task_dao.id);
+        let gtid_set_key = format!("{}{}", TASK_GID_KEY_TEMPLATE, task_dao.id);
         let hash_map: HashMap<String, String> = cluster_connection.hgetall(gtid_set_key).await?;
         if hash_map.is_empty() {
             return Ok(None);
         }
         let res = hash_map
             .iter()
-            .map(|(k, v)| format!("{}:{}", k, v))
+            .map(|(k, v)| format!("{}:1-{}", k, v))
             .collect::<Vec<String>>();
         Ok(Some(res))
     }
@@ -113,6 +114,7 @@ impl BinlogPoller {
             to_mysql_connection: destination,
             to_database_name: to_database_name,
             table_mapping_hash_map,
+            gtid_from_binlog: String::new(),
         };
         Ok(sel)
     }
@@ -124,7 +126,7 @@ impl BinlogPoller {
     }
     pub async fn create_mysql_connection2(datasource_url: String) -> Result<Conn, anyhow::Error> {
         let pool = mysql_async::Pool::from_url(datasource_url)?;
-        let mut conn = pool.get_conn().await?;
+        let conn = pool.get_conn().await?;
 
         Ok(conn)
     }
@@ -214,35 +216,22 @@ impl BinlogPoller {
 
                 EventData::GtidEvent(gtid_event) => {
                     let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
-                    // info!(
-                    //     "{}-{}-gtid:=============================={}:{}",
-                    //     self.current_binlog_name,
-                    //     self.current_binlog_position,
-                    //     gtid.to_string(),
-                    //     gtid_event.gno()
-                    // );
                     let gtid_sql = format!(
                         r#"set gtid_next='{}:{}';"#,
                         gtid.to_string(),
                         gtid_event.gno()
                     );
+                    self.gtid_from_binlog = format!("{}:{}", gtid.to_string(), gtid_event.gno());
                     Some(vec![gtid_sql])
-                    //set gtid_next='UUID:5'
                 }
-                EventData::XidEvent(_) => {
-                    // info!(
-                    //     "{}-{}-COMMIT;",
-                    //     self.current_binlog_name, self.current_binlog_position,
-                    // );
-                    Some(vec!["COMMIT;".to_string()])
-                }
+                EventData::XidEvent(_) => Some(vec!["COMMIT;".to_string()]),
                 EventData::RotateEvent(rotate_event) => {
                     self.current_binlog_name = rotate_event.name().to_string();
                     info!("rotate_event>>>{:?}", rotate_event);
                     None
                 }
                 EventData::HeartbeatEvent => None,
-                EventData::FormatDescriptionEvent(e) => None,
+                EventData::FormatDescriptionEvent(_) => None,
                 _ => {
                     info!("other>>>>>{:?}", event_data);
                     None
@@ -277,6 +266,15 @@ impl BinlogPoller {
         for sql in sqls.iter() {
             info!("handle_sql sql:{}", sql);
             sql.as_str().run(&mut self.to_mysql_connection).await?;
+            if sql == "COMMIT" {
+                let gtid = self.gtid_from_binlog.clone();
+                let gtid_str = gtid.split(":").collect::<Vec<&str>>();
+                let task_id = self.task_dao.id;
+                let task_gtid_key = format!("{}{}", TASK_GID_KEY_TEMPLATE, task_id);
+                self.redis_cluster_connection
+                    .hset(task_gtid_key, gtid_str[0], gtid_str[1])
+                    .await?;
+            }
         }
         Ok(())
     }

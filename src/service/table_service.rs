@@ -1,3 +1,5 @@
+use crate::common::app_state;
+use crate::common::app_state::AppState;
 use crate::dao::datasource_dao::DataSourceDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
@@ -12,17 +14,17 @@ use sqlx::Row;
 use sqlx::{MySql, Pool};
 use std::convert::Infallible;
 pub async fn get_table_list(
-    State(state): State<Pool<MySql>>,
+    State(state): State<AppState>,
     Path((data, database_name)): Path<(i32, String)>,
 ) -> Result<Response, Infallible> {
     handle_response!(get_table_list_with_error(state, data, database_name).await)
 }
 async fn get_table_list_with_error(
-    pool: Pool<MySql>,
+    app_state: AppState,
     datasource_id: i32,
     database_name: String,
 ) -> Result<String, anyhow::Error> {
-    let datasource_url = DataSourceDao::find_by_id(&pool, datasource_id)
+    let datasource_url = DataSourceDao::find_by_id(&app_state.db_pool, datasource_id)
         .await?
         .datasource_url;
     let mut conn = MySqlConnection::connect(&datasource_url).await?;

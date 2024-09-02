@@ -24,11 +24,44 @@ function TaskPage() {
     //0代表插入，1代表更新
     const [modalType, setModalType] = useState(0);
     const [taskTableData, setTaskTableData] = useState([]);
+    const [syncTaskMap, setSyncTaskMap] = useState(new Map());
     useEffect(() => {
         getTaskList();
     }, []);
+    useEffect(() => {
+        getSyncStatus();
 
+    }, [taskTableData]);
+    // Function to add an entry to the Map
+    const addEntry = (key, value) => {
+        setSyncTaskMap(prevMap => {
+            const newMap = new Map(prevMap);
+            newMap.set(key, value);
+            return newMap;
+        });
+    };
 
+    const getSyncStatus = () => {
+        for (let i = 0; i < taskTableData.length; i++) {
+            Request.get("/api/syncTask/status/" + taskTableData[i].id).then((res) => {
+                console.log(res);
+                const statuses = res.data.message.status;
+
+                // Map over the status entries to create an array
+                const mesArray = Object.entries(statuses).map(([key, value]) => {
+                    return {
+                        statusType: key, // e.g., "RUNNING"
+                        status: value.status,
+                        ip: value.ip,
+                        gtid_set: res.data.message.gtid_set
+                    };
+                });
+                console.log(mesArray);
+                addEntry(taskTableData[i].id, mesArray);
+
+            });
+        }
+    }
     const getTaskList = () => {
         Request.get("/api/task").then((res) => {
             console.log(res);
@@ -102,6 +135,15 @@ function TaskPage() {
             .catch(err => {
                 console.log(err)
             });
+    }
+    function replacer(key, value) {
+        // List of fields to exclude
+        const excludedFields = ['gtid_set',];
+        return excludedFields.includes(key) ? undefined : value;
+    }
+    const getSyncStatusById = (id) => {
+        const syncStatus = syncTaskMap.get(id);
+        return JSON.stringify(syncStatus, replacer);
     }
     return (
         <div className="flex flex-col">
@@ -180,6 +222,8 @@ function TaskPage() {
                         <Table.HeadCell className="font-bold text-center text-xl">目标数据源地址</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">源数据库</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">目标数据库</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">状态</Table.HeadCell>
+
                         <Table.HeadCell className="font-bold text-center text-xl">操作</Table.HeadCell>
                     </Table.Head>
                     <Table.Body className="divide-y">
@@ -192,6 +236,7 @@ function TaskPage() {
                                 <Table.Cell className="text-center">  {row.toDatasourceUrl}</Table.Cell>
                                 <Table.Cell className="text-center">  {row.fromDatabaseName}</Table.Cell>
                                 <Table.Cell className="text-center">  {row.toDatabaseName}</Table.Cell>
+                                <Table.Cell className="text-center">  {getSyncStatusById(row.id)}</Table.Cell>
 
                                 <Table.Cell className="text-center">
                                     <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
