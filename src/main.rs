@@ -32,6 +32,8 @@ use axum::routing::{delete, get};
 use axum::Router;
 
 use crate::init_redis::init_redis;
+use chrono::FixedOffset;
+use chrono::Utc;
 use clap::Parser;
 use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlConnection;
@@ -41,6 +43,8 @@ use std::vec;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 #[macro_use]
@@ -75,18 +79,6 @@ async fn create_data() -> Result<(), anyhow::Error> {
         let i_next_str = (i + 1).to_string();
         let id = id_generator_generator.real_time_generate();
 
-        // sqlx::query("insert into user(username,first_name,content)values(?,?,?)")
-        //     .bind(i_str.clone())
-        //     .bind(i_str.clone())
-        //     .bind(i_str.clone())
-        //     .execute(&pool)
-        //     .await?;
-        // sqlx::query("update user set first_name = ? where username=?")
-        //     .bind(i_next_str)
-        //     .bind(i_str.clone())
-        //     .execute(&pool)
-        //     .await?;
-        // sqlx::query("delete from user").execute(&pool).await?;
         sqlx::query(
             "INSERT INTO `all_types_table` (
     `tiny_int_col`,
@@ -137,18 +129,33 @@ async fn create_data() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+struct ShanghaiTime;
+
+impl FormatTime for ShanghaiTime {
+    fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
+        // Get the current time in UTC
+        let utc_now = Utc::now();
+        // Convert to Asia/Shanghai timezone (UTC+8)
+        let shanghai_tz = FixedOffset::east_opt(8 * 3600).expect("Unable to set timezone");
+        let shanghai_now = utc_now.with_timezone(&shanghai_tz);
+        // Format the time
+        write!(w, "{}", shanghai_now.format("%Y-%m-%d %H:%M:%S%.3f"))
+    }
+}
 fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
     let app_file = rolling::daily("./logs", "access.log");
     let (non_blocking_appender, guard) = NonBlockingBuilder::default()
         .buffered_lines_limit(10)
         .finish(app_file);
     let file_layer = tracing_subscriber::fmt::Layer::new()
+        .with_timer(ShanghaiTime)
         .with_target(true)
         .with_line_number(true)
         .with_ansi(false)
         .with_writer(non_blocking_appender)
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
     let console_layer = FmtLayer::new()
+        .with_timer(ShanghaiTime)
         .with_target(true)
         .with_line_number(true)
         .with_ansi(true)
@@ -194,7 +201,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
         .route("/auditTaskResult", get(get_audit_tasks_result))
         .with_state(db_pool);
     let final_route = Router::new().nest("/api", app);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await.unwrap();
-    axum::serve(listener, final_route).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await?;
+    axum::serve(listener, final_route).await?;
     Ok(())
 }
