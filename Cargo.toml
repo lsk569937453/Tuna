@@ -29,8 +29,8 @@ axum = "0.7.5"
 time = { version = "0.3.4", features = ["serde"] }
 
 mysql_async = { version = "0.34.1", features = ["binlog"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
 tracing-appender = "0.2.3"
 uuid = { version = "1.8.0", features = [
     "v4",       # Lets you generate random UUIDs
