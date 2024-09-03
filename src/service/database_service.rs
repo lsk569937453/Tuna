@@ -1,4 +1,3 @@
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
@@ -12,7 +11,6 @@ use sqlx::mysql::MySqlRow;
 use sqlx::Connection;
 use sqlx::MySqlConnection;
 use sqlx::Row;
-use sqlx::{MySql, Pool};
 use std::convert::Infallible;
 pub async fn get_database_list(
     State(state): State<AppState>,

@@ -1,4 +1,3 @@
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::dao::audit_task_dao::AuditTaskDao;
 use crate::dao::audit_task_result_dao::AuditTaskResultDao;
@@ -22,7 +21,6 @@ use sqlx::MySqlConnection;
 use sqlx::Row;
 use sqlx::TypeInfo;
 use sqlx::ValueRef;
-use sqlx::{MySql, Pool};
 use std::collections::HashMap;
 use std::collections::LinkedList;
 use std::convert::Infallible;
@@ -243,7 +241,7 @@ async fn get_one(
         None => Ok(None),
         Some(iterate) => {
             let mut linked_list = LinkedList::new();
-            for (index, column) in iterate.columns().iter().enumerate() {
+            for (index, _) in iterate.columns().iter().enumerate() {
                 let raw_value = iterate.try_get_raw(index)?;
                 let value = parse_value(raw_value).await;
                 linked_list.push_back(value.clone());

@@ -1,4 +1,3 @@
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
 use crate::common::common_constants::TASK_LOCK_KEY_TEMPLATE;
@@ -11,9 +10,8 @@ use local_ip_address::local_ip;
 use redis::ExistenceCheck;
 use redis::SetOptions;
 use redis::Value;
-use redis::{cluster::ClusterClient, cluster_async::ClusterConnection, AsyncCommands};
-use sqlx::MySql;
-use sqlx::Pool;
+use redis::{cluster_async::ClusterConnection, AsyncCommands};
+
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -29,7 +27,6 @@ pub async fn main_sync_redis_loop_with_error(app_state: AppState) -> Result<(), 
             continue;
         }
     }
-    Ok(())
 }
 
 //每个任务都会去遍历所有的任务，然后去抢任务执行

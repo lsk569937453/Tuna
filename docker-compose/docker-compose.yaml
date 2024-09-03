@@ -35,6 +35,35 @@ services:
       - './conf/:/etc/mysql/conf.d'
     networks:
       - app-tier
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.7.4
+    container_name: clickhouse
+    environment:
+      # Default user and database will be created using `init-defaults.sh` script
+      CLICKHOUSE_DB: my_db_name
+      CLICKHOUSE_USER: clickhouse-user
+      CLICKHOUSE_PASSWORD: secret
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.7.4
+    volumes:
+      - ./init_clickhouse:/var/init_clickhouse
+    depends_on:
+      - clickhouse
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      while ! clickhouse-client --host clickhouse --user clickhouse-user --password secret -q \"SHOW databases;\"; do
+          echo waiting for clickhouse up
+          sleep 1
+      done
+
+      clickhouse-client --host clickhouse --user clickhouse-user --password secret --queries-file /var/init_clickhouse/init.sql
+
+      tail -f /dev/null
+      "
 networks:
   app-tier:
     driver: bridge

@@ -1,4 +1,3 @@
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::common::common_constants::TASK_GID_KEY_TEMPLATE;
 use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
@@ -14,13 +13,9 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
-use redis::cluster::ClusterClient;
 use redis::AsyncCommands;
-use sqlx::{MySql, Pool};
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::hash::Hash;
-use std::sync::Arc;
 
 pub async fn create_task(
     State(state): State<AppState>,

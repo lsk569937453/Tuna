@@ -1,12 +1,10 @@
 use crate::binlog::binlog_poller::BinlogPoller;
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
-use sqlx::MySql;
-use sqlx::Pool;
+
 use std::time::Duration;
 use tokio::time::interval;
 #[instrument(name = "sync binlog", skip(cluster_connection, app_state))]

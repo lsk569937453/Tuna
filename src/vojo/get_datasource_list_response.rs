@@ -9,12 +9,3 @@ pub struct GetDatasourceListResponse {
     #[serde(with = "util")]
     pub timestamp: DateTime<Utc>,
 }
-impl GetDatasourceListResponse {
-    pub fn new(datasource_name: String, addr: String, timestamp: DateTime<Utc>) -> Self {
-        Self {
-            datasource_name,
-            addr,
-            timestamp,
-        }
-    }
-}
