@@ -138,12 +138,19 @@ function TaskPage() {
     }
     function replacer(key, value) {
         // List of fields to exclude
-        const excludedFields = ['gtid_set',];
+        const excludedFields = ['gtid_set', 'status'];
         return excludedFields.includes(key) ? undefined : value;
     }
     const getSyncStatusById = (id) => {
         const syncStatus = syncTaskMap.get(id);
         return JSON.stringify(syncStatus, replacer);
+    }
+    const getGtidSetById = (id) => {
+        if (!syncTaskMap.has(id)) {
+            return null;
+        }
+        const syncStatus = syncTaskMap.get(id);
+        return syncStatus[0].gtid_set;
     }
     return (
         <div className="flex flex-col">
@@ -218,11 +225,10 @@ function TaskPage() {
                 <Table>
                     <Table.Head>
                         <Table.HeadCell className="font-bold text-center text-xl">任务名称</Table.HeadCell>
-                        <Table.HeadCell className="font-bold text-center text-xl">源数据源地址</Table.HeadCell>
-                        <Table.HeadCell className="font-bold text-center text-xl">目标数据源地址</Table.HeadCell>
-                        <Table.HeadCell className="font-bold text-center text-xl">源数据库</Table.HeadCell>
-                        <Table.HeadCell className="font-bold text-center text-xl">目标数据库</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">源数据源地址:目标数据源地址</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">源数据库:目标数据库</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">状态</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">gtid_set</Table.HeadCell>
 
                         <Table.HeadCell className="font-bold text-center text-xl">操作</Table.HeadCell>
                     </Table.Head>
@@ -232,16 +238,33 @@ function TaskPage() {
                                 <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white text-center">
                                     {row.taskName}
                                 </Table.Cell>
-                                <Table.Cell className="text-center">  {row.fromDatasourceUrl}</Table.Cell>
-                                <Table.Cell className="text-center">  {row.toDatasourceUrl}</Table.Cell>
-                                <Table.Cell className="text-center">  {row.fromDatabaseName}</Table.Cell>
-                                <Table.Cell className="text-center">  {row.toDatabaseName}</Table.Cell>
-                                <Table.Cell className="text-center">  {getSyncStatusById(row.id)}</Table.Cell>
+                                <Table.Cell className="text-center">
+                                    <p>
+                                        {row.fromDatasourceUrl}<br />
+                                    </p>
+                                    {row.toDatasourceUrl}
+                                </Table.Cell>
 
                                 <Table.Cell className="text-center">
-                                    <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
+                                    <p>
+
+                                        {row.fromDatabaseName}<br />
+                                    </p>
+                                    {row.toDatabaseName}
+                                </Table.Cell>
+                                <Table.Cell className="text-center">  {getSyncStatusById(row.id)}</Table.Cell>
+                                <Table.Cell className="text-center">  {getGtidSetById(row.id)}</Table.Cell>
+
+                                <Table.Cell className="text-center ">
+                                    <p>
+                                        <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
+                                            onClick={() => deleteSyncTask(row.id)}>
+                                            删除
+                                        </a><br />
+                                    </p>
+                                    <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500 px-5"
                                         onClick={() => deleteSyncTask(row.id)}>
-                                        删除
+                                        查看
                                     </a>
                                 </Table.Cell>
 
