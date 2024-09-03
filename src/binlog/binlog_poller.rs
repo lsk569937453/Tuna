@@ -77,12 +77,12 @@ impl BinlogPoller {
         let mut sids = vec![];
         let get_gtid_option =
             BinlogPoller::get_gtid_set(cluster_connection.clone(), task_dao.clone()).await?;
-        if let Some(gtid_list) = get_gtid_option {
+        if let Some(gtid_list) = get_gtid_option.clone() {
             for gtid in gtid_list {
                 sids.push(gtid.parse::<Sid>()?);
             }
         }
-        info!("Pull binlog from gtid_set: {:?}", sids);
+        info!("Pull binlog from gtid_set: {:?}", get_gtid_option);
         let stream = mysql
             .get_binlog_stream(
                 mysql_async::BinlogStreamRequest::new(11)
@@ -198,7 +198,7 @@ impl BinlogPoller {
                 EventData::QueryEvent(query_event) => {
                     let sql = String::from_utf8_lossy(query_event.query_raw());
                     if sql != "BEGIN" {
-                        Some(vec!["COMMIT".to_string()])
+                        Some(vec!["COMMIT;".to_string()])
                     } else {
                         Some(vec![sql.to_string()])
                     }
@@ -264,7 +264,7 @@ impl BinlogPoller {
         for sql in sqls.iter() {
             info!("handle_sql sql:{}", sql);
             sql.as_str().run(&mut self.to_mysql_connection).await?;
-            if sql == "COMMIT" {
+            if sql == "COMMIT;" {
                 let gtid = self.gtid_from_binlog.clone();
                 let gtid_str = gtid.split(":").collect::<Vec<&str>>();
                 let task_id = self.task_dao.id;

@@ -1,5 +1,6 @@
 use crate::common::app_state::AppState;
 use crate::dao::audit_task_dao::AuditTaskDao;
+use crate::dao::audit_task_result_clickhouse_dao::AuditTaskResultClickhouseDao;
 use crate::dao::audit_task_result_dao::AuditTaskResultDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
@@ -12,6 +13,8 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use serde_json::Value;
 use sqlx::mysql::MySqlValueRef;
 use sqlx::Column;
@@ -24,6 +27,7 @@ use sqlx::ValueRef;
 use std::collections::HashMap;
 use std::collections::LinkedList;
 use std::convert::Infallible;
+use uuid::Uuid;
 
 pub async fn create_audit_task(
     State(state): State<AppState>,
@@ -133,6 +137,7 @@ async fn do_execute(
     sync_task_dao: SyncTaskDao,
     audit_task_id: i32,
 ) -> Result<(), anyhow::Error> {
+    let execution_id = Uuid::new_v4().to_string();
     let mut from_mysql_connection =
         MySqlConnection::connect(&sync_task_dao.from_datasource_url).await?;
     let mut to_mysql_connection =
@@ -146,8 +151,13 @@ async fn do_execute(
         table_mapping_item.to_primary_key.clone(),
         sync_task_dao.to_database_name.clone(),
         table_mapping_item.to_table_name.clone(),
+        true,
+        audit_task_id as u32,
+        execution_id.clone(),
     )
     .await?;
+    AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client.clone(), left_compare)
+        .await?;
     let right_compare = compare(
         &mut to_mysql_connection,
         table_mapping_item.to_primary_key,
@@ -157,16 +167,13 @@ async fn do_execute(
         table_mapping_item.from_primary_key,
         sync_task_dao.from_database_name,
         table_mapping_item.from_table_name.clone(),
+        false,
+        audit_task_id as u32,
+        execution_id,
     )
     .await?;
+    AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client, right_compare).await?;
 
-    AuditTaskResultDao::create_task_result(
-        &app_state.db_pool,
-        audit_task_id,
-        Some(left_compare),
-        Some(right_compare),
-    )
-    .await?;
     Ok(())
 }
 async fn compare(
@@ -176,10 +183,13 @@ async fn compare(
     from_table_name: String,
     to_mysql_connection: &mut MySqlConnection,
     to_primary_key: String,
-
     to_database_name: String,
     to_table_name: String,
-) -> Result<String, anyhow::Error> {
+    main_flag: bool,
+    audit_task_id: u32,
+    execution_id: String,
+) -> Result<Vec<AuditTaskResultClickhouseDao>, anyhow::Error> {
+    let mut res = vec![];
     let select_sql = format!("select * from {}.{}", from_database_name, from_table_name);
     let source_data = get_all_data(from_mysql_connection, select_sql, from_primary_key).await?;
     info!("source_data count:{}", source_data.len());
@@ -188,7 +198,6 @@ async fn compare(
         to_database_name, to_table_name, to_primary_key
     );
     info!("to_select_sql:{}", to_select_sql);
-    let mut result = vec![];
     for (key, value) in source_data.iter() {
         let data = get_one(to_mysql_connection, to_select_sql.clone(), key.clone()).await?;
         if let Some(data) = data {
@@ -196,14 +205,54 @@ async fn compare(
             info!("source:{:?},dst:{:?},result:{}", value, data, bool);
 
             if !bool {
-                result.push(key.clone());
+                let source_str = format!("{:?}", value);
+                let dst_str = format!("{:?}", data);
+
+                info!("sourcexxxx:{:?},dstxxxxxx:{:?}", source_str, dst_str);
+
+                let dao = if main_flag {
+                    AuditTaskResultClickhouseDao::new(
+                        source_str,
+                        dst_str,
+                        audit_task_id,
+                        execution_id.clone(),
+                        format!("{:?}", key),
+                    )
+                } else {
+                    AuditTaskResultClickhouseDao::new(
+                        dst_str,
+                        source_str,
+                        audit_task_id,
+                        execution_id.clone(),
+                        format!("{:?}", key),
+                    )
+                };
+                res.push(dao);
             }
         } else {
-            error!("no data,key is :{},value:{:?}", key, value);
-            result.push(key.clone());
+            let source_str = BASE64_STANDARD.encode(format!("{:?}", value));
+            let dst_str = BASE64_STANDARD.encode("".to_string());
+            let dao = if main_flag {
+                AuditTaskResultClickhouseDao::new(
+                    source_str,
+                    dst_str,
+                    audit_task_id,
+                    execution_id.clone(),
+                    format!("{:?}", key),
+                )
+            } else {
+                AuditTaskResultClickhouseDao::new(
+                    dst_str,
+                    source_str,
+                    audit_task_id,
+                    execution_id.clone(),
+                    format!("{:?}", key),
+                )
+            };
+            res.push(dao);
         }
     }
-    let res = serde_json::to_string(&result)?;
+    // let res = serde_json::to_string(&result)?;
     Ok(res)
 }
 async fn get_all_data(
@@ -256,7 +305,7 @@ async fn parse_value<'r>(raw_value: MySqlValueRef<'r>) -> Value {
     }
     let type_info = raw_value.type_info();
     let type_name = type_info.name();
-    info!("type_name:,raw_value:{} ", type_name);
+    // info!("type_name:,raw_value:{} ", type_name);
     match type_name {
         "REAL" | "FLOAT" | "NUMERIC" | "DECIMAL" | "FLOAT4" | "FLOAT8" | "DOUBLE" => {
             <f64 as Decode<sqlx::mysql::MySql>>::decode(raw_value)
@@ -309,4 +358,22 @@ async fn delete_audit_task_by_id_with_error(
         response_object: redis_util,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_direct_comparison_equal() {
+        let mut list1 = LinkedList::new();
+        list1.push_back(Value::String("apple".to_string()));
+        list1.push_back(Value::Number(serde_json::Number::from(10)));
+
+        let mut list2 = LinkedList::new();
+        list2.push_back(Value::String("apple".to_string()));
+        list2.push_back(Value::Number(serde_json::Number::from(10)));
+
+        assert_eq!(list1, list2, "LinkedLists should be equal.");
+    }
 }
