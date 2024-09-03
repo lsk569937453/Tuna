@@ -1,4 +1,5 @@
 use binlog::binlog_realtime::test_binlog_with_realtime;
+use common::init_clickhouse::init_clickhouse;
 use common::init_redis;
 
 use schedule::sync_redis::main_sync_redis_loop_with_error;
@@ -198,11 +199,13 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
     let redis_client = init_redis().await?;
+    let clickhouse_client = init_clickhouse().await?;
 
     // Combine them into a single shared state
     let shared_state = AppState {
         db_pool: db_pool,
         redis_client: redis_client,
+        clickhouse_client: clickhouse_client,
     };
     let cloned_shared_state = shared_state.clone();
     tokio::spawn(async move {
