@@ -17,9 +17,7 @@ use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
 use redis::cluster_async::ClusterConnection;
 use redis::AsyncCommands;
-use sqlparser::ast::Statement;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
+
 use sqlx::mysql::MySqlConnection;
 use sqlx::Connection;
 use sqlx::Row;
@@ -551,12 +549,13 @@ pub fn parse_column(
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use sqlparser::dialect::GenericDialect;
+    use sqlparser::parser::Parser;
     #[test]
     fn test_parser() {
         let sql = "CREATE USER 'user'@'%' IDENTIFIED WITH 'mysql_native_password' AS '*D5D9F81F5542DE067FFF5FF7A4CA4BDD322C578F'";
         let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
-        let statements = Parser::new(&dialect)
+        let _ = Parser::new(&dialect)
             // Parse a SQL string with 2 separate statements
             .try_with_sql(sql)
             .unwrap()

@@ -9,7 +9,6 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
 use sqlx::mysql::MySqlConnectOptions;
-use sqlx::{MySql, Pool};
 use std::convert::Infallible;
 use std::str::FromStr;
 pub async fn create_datasource(

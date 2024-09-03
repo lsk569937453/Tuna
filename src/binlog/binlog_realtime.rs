@@ -1,13 +1,8 @@
 use anyhow::anyhow;
-use mysql_async::binlog::events::UpdateRowsEvent;
 use mysql_async::{Conn, Sid};
 use mysql_async::{Opts, Value};
-use mysql_common::binlog::consts::EventFlags;
 use mysql_common::binlog::events::EventData;
-use std::cell::RefCell;
-use std::time::Duration;
 
-use crate::common::init::init_with_error;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
@@ -17,13 +12,7 @@ use tracing_subscriber::fmt::Layer as FmtLayer;
 
 use tracing_subscriber::Layer;
 
-use axum::routing::post;
-use axum::Router;
-
-use crate::init_redis::init_redis;
-use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlConnection;
-use sqlx::mysql::MySqlPoolOptions;
 use sqlx::{Connection, Row};
 use std::vec;
 use tracing_appender::non_blocking::NonBlockingBuilder;
@@ -99,16 +88,11 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     let mut current_table_map_event: Option<TableMapEvent> = None;
     let mut column_list = None;
     while let Some(Ok(event)) = stream.next().await {
-        // let event_flags = event.header().flags();
-        // if event_flags.contains(EventFlags::LOG_EVENT_IGNORABLE_F) {
-        //     continue;
-        // }
         bin_log_position = event.header().log_pos();
         let event_cloned = event.clone();
         let option_event_data = event_cloned.read_data()?;
         let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
         let dst = event_data.clone();
-        // println!("event is :{:?}", event_data);
 
         match dst {
             EventData::TableMapEvent(table_map_event) => {
@@ -116,7 +100,6 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 let table_name = table_map_event.table_name();
                 let key = format!("{}{}", db_name, table_name);
                 if db_name != "mydb" {
-                    // println!(">>>>>>>>>>>>>>>>>>>{}-{}", db_name, table_name);
                     continue;
                 }
                 let s = cache.get(&key).await;
@@ -169,7 +152,7 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                     gtid_event.gno()
                 );
             }
-            EventData::XidEvent(e) => {
+            EventData::XidEvent(_) => {
                 println!("{}-{}-COMMIT;", bin_log_name, bin_log_position);
             }
             EventData::RotateEvent(rotate_event) => {
@@ -209,8 +192,7 @@ async fn parse_sql_with_error(
     match rows_event_data {
         RowsEventData::WriteRowsEvent(write_rows_event) => {
             let rows_event = write_rows_event.rows(&table_map_event);
-            let (column_names, column_values) =
-                parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
+            let (_, _) = parse_insert_sql(rows_event, db_name, table_name, column_list).await?;
         }
         RowsEventData::UpdateRowsEvent(update_rows_event) => {
             let rows_event = update_rows_event.rows(&table_map_event);
@@ -234,13 +216,12 @@ async fn parse_insert_sql(
     // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
     let mut column_names = vec![];
     let mut column_values = vec![];
-    let mut res = "".to_string();
     while let Some(item) = rows_event.next() {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (None, Some(mut r2)) => {
                     let columns = r2.columns();
-                    for (index, item) in columns.iter().enumerate() {
+                    for (index, _) in columns.iter().enumerate() {
                         column_names.push(column_list[index].clone());
 
                         let value = r2.take(index);
@@ -254,10 +235,10 @@ async fn parse_insert_sql(
                                         column_values
                                             .push(format!("\"{}\"", String::from_utf8_lossy(&s)));
                                     }
-                                    Value::Double(v) => {
+                                    Value::Double(_) => {
                                         column_values.push("NULL".to_string());
                                     }
-                                    Value::Float(v) => {}
+                                    Value::Float(_) => {}
                                     Value::UInt(v) => {
                                         column_values.push(format!("{}", v));
                                     }
@@ -291,7 +272,7 @@ async fn parse_insert_sql(
             }
         }
     }
-    res = format!(
+    let res = format!(
         "INSERT INTO `{}`.`{}`({}) VALUES ({});",
         db_name,
         table_name,
@@ -312,13 +293,12 @@ async fn parse_update_sql(
     let mut after_values = vec![];
     let mut column_names = vec![];
 
-    let mut res = "".to_string();
     while let Some(item) = rows_event.next() {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (Some(mut r1), Some(mut r2)) => {
                     let columns = r2.columns();
-                    for (index, item) in columns.iter().enumerate() {
+                    for (index, _) in columns.iter().enumerate() {
                         column_names.push(column_list[index].clone());
                         let before_value = r1.take(index);
 
@@ -355,12 +335,12 @@ async fn parse_update_sql(
                                     after_values.push(after_value);
                                 }
                                 (
-                                    BinlogValue::Value(Value::Double(before_i)),
-                                    BinlogValue::Value(Value::Double(after_i)),
+                                    BinlogValue::Value(Value::Double(_)),
+                                    BinlogValue::Value(Value::Double(_)),
                                 ) => {}
                                 (
-                                    BinlogValue::Value(Value::UInt(before_i)),
-                                    BinlogValue::Value(Value::UInt(after_i)),
+                                    BinlogValue::Value(Value::UInt(_)),
+                                    BinlogValue::Value(Value::UInt(_)),
                                 ) => {}
                                 _ => {}
                             }
@@ -380,7 +360,7 @@ async fn parse_update_sql(
             }
         }
     }
-    res = format!(
+    let res = format!(
         "UPDATE `{}`.`{}` SET {} WHERE {} LIMIT 1;",
         db_name,
         table_name,
@@ -399,13 +379,12 @@ async fn parse_delete_sql(
     // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
     let mut column_names = vec![];
     let mut column_values = vec![];
-    let mut res = "".to_string();
     while let Some(item) = rows_event.next() {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (Some(mut r1), None) => {
                     let columns = r1.columns();
-                    for (index, item) in columns.iter().enumerate() {
+                    for (index, _) in columns.iter().enumerate() {
                         column_names.push(column_list[index].clone());
 
                         let value = r1.take(index);
@@ -422,11 +401,11 @@ async fn parse_delete_sql(
                                             format!(r#"{}="{}""#, column_list[index], value);
                                         column_values.push(current);
                                     }
-                                    Value::Double(v) => {
+                                    Value::Double(_) => {
                                         // column_values.push("NULL".to_string());
                                     }
-                                    Value::Float(v) => {}
-                                    Value::UInt(v) => {
+                                    Value::Float(_) => {}
+                                    Value::UInt(_) => {
                                         // column_values.push(format!("{}", v));
                                     }
                                     Value::NULL => {}
@@ -445,9 +424,6 @@ async fn parse_delete_sql(
                 (Some(r1), Some(r2)) => {
                     println!("r1:{:?},r2:{:?}", r1, r2);
                 }
-                (Some(r1), None) => {
-                    println!("r1:{:?},", r1);
-                }
 
                 _ => {}
             },
@@ -457,12 +433,12 @@ async fn parse_delete_sql(
             }
         }
     }
-    res = format!(
+    let res = format!(
         "DELETE FROM `{}`.`{}` WHERE {} LIMIT 1;",
         db_name,
         table_name,
         column_values.join(" AND "),
     );
-    println!("{}", res);
+    info!("{}", res);
     Ok((column_names.join(","), column_values.join(" , ")))
 }

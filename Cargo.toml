@@ -5,14 +5,14 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.80"
-tokio = { version = "1.32.0", features = ["full"] }
-clap = { version = "4.4.1", features = ["derive"] }
+tokio = { version = "1.40.0", features = ["full"] }
+clap = { version = "4.5.16", features = ["derive"] }
 log = "0.4.20"
-env_logger = "0.10.0"
-serde = { version = "1.0.190", features = ["derive"] }
-serde_json = "1.0.108"
+env_logger = "0.11.5"
+serde = { version = "1.0.209", features = ["derive"] }
+serde_json = "1.0.127"
 rand = "0.8.5"
-sqlx = { version = "0.8.0", features = [
+sqlx = { version = "0.8.1", features = [
     "runtime-tokio",
     "tls-rustls",
     "mysql",
@@ -28,7 +28,7 @@ moka = { version = "0.12", features = ["future"] }
 axum = "0.7.5"
 time = { version = "0.3.4", features = ["serde"] }
 
-mysql_async = { version = "0.34.1", features = ["binlog"] }
+mysql_async = { version = "0.34.2", features = ["binlog"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
 tracing-appender = "0.2.3"
@@ -42,3 +42,4 @@ redis = { version = "0.26.1", features = ["cluster-async", "tokio-comp"] }
 sqlparser = "0.50.0"
 rs-snowflake = "0.6.0"
 local-ip-address = "0.6.2"
+clickhouse = "0.12.2"

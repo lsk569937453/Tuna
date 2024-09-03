@@ -1,4 +1,3 @@
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::dao::audit_task_result_dao::AuditTaskResultDao;
 use crate::handle_response;
@@ -6,7 +5,6 @@ use crate::vojo::base_response::BaseResponse;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
-use sqlx::{MySql, Pool};
 use std::convert::Infallible;
 
 pub async fn get_audit_tasks_result(State(state): State<AppState>) -> Result<Response, Infallible> {

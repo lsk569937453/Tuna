@@ -1,11 +1,6 @@
-use anyhow::anyhow;
-
 use binlog::binlog_realtime::test_binlog_with_realtime;
 use common::init_redis;
-use futures::StreamExt;
-use moka::future::Cache;
-use mysql_async::binlog::events::{RowsEventData, RowsEventRows, TableMapEvent};
-use mysql_async::binlog::value::BinlogValue;
+
 use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::audit_task_result_service::get_audit_tasks_result;
 use service::audit_task_service::{
@@ -39,11 +34,7 @@ use chrono::FixedOffset;
 use chrono::Utc;
 use clap::Parser;
 use snowflake::SnowflakeIdGenerator;
-use sqlx::mysql::MySqlConnection;
 use sqlx::mysql::MySqlPoolOptions;
-use sqlx::{Connection, Row};
-use std::sync::Arc;
-use std::vec;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
@@ -57,22 +48,53 @@ extern crate tracing;
 extern crate anyhow;
 #[macro_use]
 extern crate serde_json;
+use clap::Subcommand;
+
 #[derive(Parser)]
-#[command(author, version, about, long_about)]
-struct Cli {
-    /// The http port,default port is 80
-    #[arg(
-        default_value_t = 1000,
-        short = 'C',
-        long = "count",
-        value_name = "Count"
-    )]
-    count: u32,
+#[command(name = "MyApp")]
+#[command(about = "An application with multiple flags and arguments")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
 }
-async fn create_data() -> Result<(), anyhow::Error> {
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Start the HTTP server
+    Default,
+
+    /// Insert data into the database
+    I {
+        /// The number of records to insert
+        #[arg(short, long)]
+        count: i32,
+    },
+
+    /// Show the binlog
+    S,
+}
+#[tokio::main]
+async fn main() {
+    if let Err(err) = main_with_error().await {
+        error!("main_with_error error:{:?}", err);
+    }
+}
+async fn main_with_error() -> Result<(), anyhow::Error> {
     let _work_guard = setup_logger()?;
-    let cli: Cli = Cli::parse();
-    let count = cli.count;
+
+    let cli = Cli::parse();
+
+    match cli.command.unwrap_or(Commands::Default) {
+        Commands::Default => app_with_error().await,
+        Commands::I { count } => create_data(count).await,
+        Commands::S => {
+            test_binlog_with_realtime().await
+            // Add your logic here
+        }
+    }
+}
+
+async fn create_data(count: i32) -> Result<(), anyhow::Error> {
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect("mysql://root:root@localhost:9306/mydb")
@@ -80,8 +102,8 @@ async fn create_data() -> Result<(), anyhow::Error> {
     let mut id_generator_generator = SnowflakeIdGenerator::new(1, 1);
     for i in 0..count {
         let i_str = i.to_string();
-        let i_next_str = (i + 1).to_string();
-        let id = id_generator_generator.real_time_generate();
+        let _ = (i + 1).to_string();
+        let _ = id_generator_generator.real_time_generate();
 
         sqlx::query(
             "INSERT INTO `all_types_table` (
@@ -171,14 +193,8 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
         .init();
     Ok(guard)
 }
-#[tokio::main]
-async fn main() {
-    if let Err(e) = main_with_error().await {
-        error!("{:?}", e);
-    }
-}
-async fn main_with_error() -> Result<(), anyhow::Error> {
-    let _work_guard = setup_logger()?;
+
+async fn app_with_error() -> Result<(), anyhow::Error> {
     let db_pool = common::sql_connections::create_pool().await?;
     init_with_error(db_pool.clone()).await?;
     let redis_client = init_redis().await?;

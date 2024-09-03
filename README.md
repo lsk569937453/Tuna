@@ -49,3 +49,16 @@ SHOW GRANTS FOR user                         //列出某用户权限
 #redis-key:
 - 任务列表:     key:tuna:task:task_id  value是状态
 - 任务锁：      key:tuna:task_lock:task_id
+
+# Command
+To insert data:
+```
+./myapp i --count 100
+
+```
+To show the binlog:
+
+```
+./myapp s
+
+```

@@ -1,4 +1,3 @@
-use crate::common::app_state;
 use crate::common::app_state::AppState;
 use crate::dao::datasource_dao::DataSourceDao;
 use crate::handle_response;
@@ -11,7 +10,6 @@ use axum::response::Response;
 use sqlx::Connection;
 use sqlx::MySqlConnection;
 use sqlx::Row;
-use sqlx::{MySql, Pool};
 use std::convert::Infallible;
 pub async fn get_table_list(
     State(state): State<AppState>,
