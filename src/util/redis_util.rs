@@ -24,18 +24,14 @@ pub async fn lock(
     let result: Option<Value> = cluster_connection
         .set_options(key.clone(), val.clone(), set_options)
         .await?;
-    let res = match result {
-        Some(Value::Okay) => true,
-        _ => false,
-    };
+    let res = matches!(result, Some(Value::Okay));
 
     info!("lock key is {},value is {}，res:{},", key, val, res);
 
     Ok((val, res))
 }
 pub fn get_unique_lock_id() -> String {
-    let uuid = Uuid::new_v4().to_string();
-    uuid
+    Uuid::new_v4().to_string()
 }
 pub async fn unlock(
     cluster_connection: &mut ClusterConnection,

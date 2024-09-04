@@ -60,10 +60,10 @@ async fn delete_datasource_by_id_with_error(
     app_state: AppState,
     id: i32,
 ) -> Result<String, anyhow::Error> {
-    let redis_util = DataSourceDao::delete(&app_state.db_pool, id).await?;
+    DataSourceDao::delete(&app_state.db_pool, id).await?;
     let data = BaseResponse {
         response_code: 0,
-        response_object: redis_util,
+        response_object: 0,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }

@@ -13,8 +13,8 @@ use mysql_async::consts::ColumnType;
 use mysql_async::prelude::Query;
 use mysql_async::BinlogStream;
 use mysql_async::Column;
+use mysql_async::Opts;
 use mysql_async::{Conn, Sid};
-use mysql_async::{Opts, Value};
 use redis::cluster_async::ClusterConnection;
 use redis::AsyncCommands;
 
@@ -99,7 +99,7 @@ impl BinlogPoller {
         let to_database_name = task_dao.clone().to_database_name;
         let sel = Self {
             redis_cluster_connection: cluster_connection,
-            task_dao: task_dao,
+            task_dao,
             current_gtid_set: None,
             binlog_stream: stream,
             current_db_name: String::new(),
@@ -110,7 +110,7 @@ impl BinlogPoller {
             cache: Cache::new(1000),
             from_mysql_connection: source,
             to_mysql_connection: destination,
-            to_database_name: to_database_name,
+            to_database_name,
             table_mapping_hash_map,
             gtid_from_binlog: String::new(),
         };
@@ -154,7 +154,9 @@ impl BinlogPoller {
                     let s = self.cache.get(&key).await;
 
                     //可能查询很多次
-                    let current_column_list = if s.is_none() {
+                    let current_column_list = if let Some(v) = s {
+                        v
+                    } else {
                         let v = self
                             .parse_colomns(
                                 db_name.to_string().clone(),
@@ -165,9 +167,8 @@ impl BinlogPoller {
                             .insert(db_name.to_string().clone(), v.clone())
                             .await;
                         v
-                    } else {
-                        s.unwrap()
                     };
+
                     self.column_list = Some(current_column_list);
                     None
                 }
@@ -214,12 +215,8 @@ impl BinlogPoller {
 
                 EventData::GtidEvent(gtid_event) => {
                     let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
-                    let gtid_sql = format!(
-                        r#"set gtid_next='{}:{}';"#,
-                        gtid.to_string(),
-                        gtid_event.gno()
-                    );
-                    self.gtid_from_binlog = format!("{}:{}", gtid.to_string(), gtid_event.gno());
+                    let gtid_sql = format!(r#"set gtid_next='{}:{}';"#, gtid, gtid_event.gno());
+                    self.gtid_from_binlog = format!("{}:{}", gtid, gtid_event.gno());
                     Some(vec![gtid_sql])
                 }
                 EventData::XidEvent(_) => Some(vec!["COMMIT;".to_string()]),
@@ -282,19 +279,16 @@ fn should_save(
     table_mapping_hash_map: HashMap<String, TableMappingItem>,
     from_database_name: String,
 ) -> bool {
-    if let Some(current_map_event) = current_table_map_event.clone() {
+    let var_name = if let Some(current_map_event) = current_table_map_event.clone() {
         let db_name = current_map_event.database_name().to_string();
         let first = db_name == from_database_name;
         let second = table_mapping_hash_map
             .contains_key(current_map_event.table_name().to_string().as_str());
-        if first && second {
-            return true;
-        } else {
-            return false;
-        }
+        first && second
     } else {
-        return false;
-    }
+        false
+    };
+    var_name
 }
 async fn parse_sql_with_error(
     rows_event_data: RowsEventData<'_>,
@@ -331,7 +325,7 @@ async fn parse_sql_with_error(
 }
 
 async fn parse_insert_sql(
-    mut rows_event: RowsEventRows<'_>,
+    rows_event: RowsEventRows<'_>,
     db_name: String,
     table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
@@ -340,7 +334,7 @@ async fn parse_insert_sql(
     let mut column_names = vec![];
     let mut column_values = vec![];
     let mut res = vec![];
-    while let Some(item) = rows_event.next() {
+    for item in rows_event {
         column_names.clear();
         column_values.clear();
         match item {
@@ -385,7 +379,7 @@ async fn parse_insert_sql(
     Ok(res)
 }
 async fn parse_update_sql(
-    mut rows_event: RowsEventRows<'_>,
+    rows_event: RowsEventRows<'_>,
     db_name: String,
     table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
@@ -396,7 +390,7 @@ async fn parse_update_sql(
     let mut after_values = vec![];
 
     let mut res = vec![];
-    while let Some(item) = rows_event.next() {
+    for item in rows_event {
         after_values.clear();
         match item {
             Ok((row1, row2)) => match (row1, row2) {
@@ -446,7 +440,7 @@ async fn parse_update_sql(
     Ok(res)
 }
 async fn parse_delete_sql(
-    mut rows_event: RowsEventRows<'_>,
+    rows_event: RowsEventRows<'_>,
     db_name: String,
     table_mapping_item: TableMappingItem,
     column_list: Vec<String>,
@@ -456,7 +450,7 @@ async fn parse_delete_sql(
 
     let mut column_values = vec![];
     let mut res = vec![];
-    while let Some(item) = rows_event.next() {
+    for item in rows_event {
         column_values.clear();
         match item {
             Ok((row1, row2)) => match (row1, row2) {
@@ -526,7 +520,7 @@ pub fn parse_column(
         }
         BinlogValue::Jsonb(aaa) => {
             let t = serde_json::Value::try_from(aaa)?;
-            let str = format!(r#"'{}'"#, t.to_string());
+            let str = format!(r#"'{}'"#, t);
             str
         }
         BinlogValue::JsonDiff(ss) => {

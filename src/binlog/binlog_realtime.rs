@@ -71,7 +71,7 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
 
     let mysql = Conn::new(Opts::from_url(datasource_url)?).await?;
     let input = "4675d286-5dd4-11ef-976c-0242c0a83002:1";
-    let sid = input.parse::<Sid>()?;
+    let _sid = input.parse::<Sid>()?;
 
     // let e = input.parse::<Sid>().unwrap_err();
     let mut stream = mysql
@@ -105,18 +105,19 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                 let s = cache.get(&key).await;
 
                 //可能查询很多次
-                let current_column_list = if s.is_none() {
+                let current_column_list = if let Some(v) = s {
+                    v
+                } else {
                     let v = parse_colomns(
                         db_name.to_string().clone(),
                         table_name.to_string().clone(),
-                        &datasource_url,
+                        datasource_url,
                     )
                     .await?;
                     cache.insert(db_name.to_string().clone(), v.clone()).await;
                     v
-                } else {
-                    s.unwrap()
                 };
+
                 column_list = Some(current_column_list);
                 current_table_map_event = Some(table_map_event.into_owned());
             }
@@ -148,7 +149,7 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
                     "{}-{}-gtid:=============================={}:{}",
                     bin_log_name,
                     bin_log_position,
-                    gtid.to_string(),
+                    gtid,
                     gtid_event.gno()
                 );
             }
@@ -171,13 +172,9 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
 fn should_save(current_table_map_event: Option<TableMapEvent>) -> bool {
     if let Some(current_map_event) = current_table_map_event.clone() {
         let db_name = current_map_event.database_name();
-        if db_name == "mydb" {
-            return true;
-        } else {
-            return false;
-        }
+        db_name == "mydb"
     } else {
-        return false;
+        false
     }
 }
 async fn parse_sql_with_error(
@@ -208,7 +205,7 @@ async fn parse_sql_with_error(
     Ok(())
 }
 async fn parse_insert_sql(
-    mut rows_event: RowsEventRows<'_>,
+    rows_event: RowsEventRows<'_>,
     db_name: String,
     table_name: String,
     column_list: Vec<String>,
@@ -216,7 +213,7 @@ async fn parse_insert_sql(
     // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
     let mut column_names = vec![];
     let mut column_values = vec![];
-    while let Some(item) = rows_event.next() {
+    for item in rows_event {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (None, Some(mut r2)) => {
@@ -283,7 +280,7 @@ async fn parse_insert_sql(
     Ok((column_names.join(","), column_values.join(" , ")))
 }
 async fn parse_update_sql(
-    mut rows_event: RowsEventRows<'_>,
+    rows_event: RowsEventRows<'_>,
     db_name: String,
     table_name: String,
     column_list: Vec<String>,
@@ -293,7 +290,7 @@ async fn parse_update_sql(
     let mut after_values = vec![];
     let mut column_names = vec![];
 
-    while let Some(item) = rows_event.next() {
+    for item in rows_event {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (Some(mut r1), Some(mut r2)) => {
@@ -371,7 +368,7 @@ async fn parse_update_sql(
     Ok(())
 }
 async fn parse_delete_sql(
-    mut rows_event: RowsEventRows<'_>,
+    rows_event: RowsEventRows<'_>,
     db_name: String,
     table_name: String,
     column_list: Vec<String>,
@@ -379,7 +376,7 @@ async fn parse_delete_sql(
     // let row_event = write_rows_event.rows.first().ok_or(anyhow!("no rows"))?;
     let mut column_names = vec![];
     let mut column_values = vec![];
-    while let Some(item) = rows_event.next() {
+    for item in rows_event {
         match item {
             Ok((row1, row2)) => match (row1, row2) {
                 (Some(mut r1), None) => {

@@ -7,10 +7,10 @@ use redis::{cluster_async::ClusterConnection, AsyncCommands};
 
 use std::time::Duration;
 use tokio::time::interval;
-#[instrument(name = "sync binlog", skip(cluster_connection, app_state))]
+#[instrument(name = "sync binlog", skip(cluster_connection, _app_state))]
 pub async fn sync_binlog_with_error(
     cluster_connection: &mut ClusterConnection,
-    app_state: AppState,
+    _app_state: AppState,
     task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
     let duration = 5000;

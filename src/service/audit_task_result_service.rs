@@ -1,6 +1,5 @@
 use crate::common::app_state::AppState;
 use crate::dao::audit_task_result_clickhouse_dao::AuditTaskResultClickhouseDao;
-use crate::dao::audit_task_result_dao::AuditTaskResultDao;
 use crate::handle_response;
 use crate::vojo::base_response::BaseResponse;
 use axum::extract::State;
