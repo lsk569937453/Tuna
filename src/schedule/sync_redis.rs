@@ -45,7 +45,7 @@ async fn sync_task_ids(
             .clone()
             .get(task_info_key.clone())
             .await?;
-        if task_info_option == None {
+        if task_info_option.is_none() {
             let task_lock = format!("{}{}", TASK_LOCK_KEY_TEMPLATE, task_id);
             info!(
                 "try to get the task_lock,task_id:{},task_lock is {}",

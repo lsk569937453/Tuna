@@ -2,7 +2,7 @@ use crate::util;
 use serde::{Deserialize, Serialize};
 use sqlx::types::chrono::DateTime;
 use sqlx::types::chrono::Utc;
-use sqlx::{Error, MySql, MySqlPool};
+use sqlx::{Error, MySqlPool};
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AuditTaskDao {

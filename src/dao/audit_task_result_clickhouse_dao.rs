@@ -3,11 +3,8 @@ use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::fmt::Debug;
-use std::fmt::Formatter;
-use time::format_description::well_known::Rfc3339;
-use time::macros::format_description;
+use time::OffsetDateTime;
 use time::UtcOffset;
-use time::{format_description, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::common::common_constants::COMMON_TIME_FORMAT;
@@ -29,8 +26,8 @@ pub struct AuditTaskResultClickhouseDao {
 #[derive(Serialize_repr, Deserialize_repr, Debug)]
 
 pub enum AuditTaskResultStatus {
-    SAME = 0,
-    DIFFERENT = 1,
+    Same = 0,
+    Different = 1,
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 
@@ -115,16 +112,16 @@ impl AuditTaskResultClickhouseDao {
     ) -> Result<Vec<AuditTaskResultListDao>, anyhow::Error> {
         let result = client
             .query(
-                "SELECT 
+                "SELECT
     execution_id,
     COUNT(*) AS total_tasks,
         MAX(is_same) AS is_same,
     MIN(timestamp) AS first_occurrence
-FROM 
+FROM
     tuna.audit_task_result
-GROUP BY 
+GROUP BY
     execution_id
-ORDER BY 
+ORDER BY
     first_occurrence DESC",
             )
             .fetch_all::<AuditTaskResultListDao>()

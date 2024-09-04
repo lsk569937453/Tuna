@@ -49,8 +49,7 @@ extern crate tracing;
 extern crate anyhow;
 #[macro_use]
 extern crate serde_json;
-#[macro_use]
-extern crate time;
+
 use clap::Subcommand;
 
 #[derive(Parser)]
@@ -205,9 +204,9 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
 
     // Combine them into a single shared state
     let shared_state = AppState {
-        db_pool: db_pool,
-        redis_client: redis_client,
-        clickhouse_client: clickhouse_client,
+        db_pool,
+        redis_client,
+        clickhouse_client,
     };
     let cloned_shared_state = shared_state.clone();
     tokio::spawn(async move {

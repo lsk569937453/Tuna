@@ -8,6 +8,6 @@ pub struct SyncTaskStatusRes {
 // status: 0:running 1:stop
 #[derive(Serialize, Clone)]
 pub enum SyncTaskStatus {
-    RUNNING { status: u8, ip: String },
-    STOP { status: u8 },
+    Running { status: u8, ip: String },
+    Stop { status: u8 },
 }

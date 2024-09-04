@@ -67,10 +67,10 @@ async fn delete_sync_task_by_id_with_error(
     app_state: AppState,
     id: i32,
 ) -> Result<String, anyhow::Error> {
-    let redis_util = SyncTaskDao::delete_task(&app_state.db_pool, id).await?;
+    SyncTaskDao::delete_task(&app_state.db_pool, id).await?;
     let data = BaseResponse {
         response_code: 0,
-        response_object: redis_util,
+        response_object: 0,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
@@ -91,8 +91,8 @@ async fn get_sync_task_status_by_id_with_error(
         .await
         .map_err(|e| anyhow!("get_sync_task_status_by_id_with_error error:{:?}", e))?;
     let status = match redis_res {
-        Some(r) => SyncTaskStatus::RUNNING { status: 1, ip: r },
-        None => SyncTaskStatus::STOP { status: 1 },
+        Some(r) => SyncTaskStatus::Running { status: 1, ip: r },
+        None => SyncTaskStatus::Stop { status: 1 },
     };
     let gtid_redis_key = format!("{}{}", TASK_GID_KEY_TEMPLATE, id);
 

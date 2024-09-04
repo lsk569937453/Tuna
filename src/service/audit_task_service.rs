@@ -2,7 +2,6 @@ use crate::common::app_state::AppState;
 use crate::dao::audit_task_dao::AuditTaskDao;
 use crate::dao::audit_task_result_clickhouse_dao::AuditTaskResultClickhouseDao;
 use crate::dao::audit_task_result_clickhouse_dao::AuditTaskResultStatus;
-use crate::dao::audit_task_result_dao::AuditTaskResultDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
 use crate::vojo::audit_task_req::AuditTaskReq;
@@ -14,8 +13,7 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
+
 use serde_json::Value;
 use sqlx::mysql::MySqlValueRef;
 use sqlx::Column;
@@ -190,7 +188,7 @@ async fn do_execute(
             audit_task_id as u32,
             execution_id.clone(),
             "null".to_string(),
-            AuditTaskResultStatus::SAME,
+            AuditTaskResultStatus::Same,
         );
         info!("default_row: {}", serde_json::to_string(&default_row)?);
         AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client, vec![default_row])
@@ -240,7 +238,7 @@ async fn compare(
                         audit_task_id,
                         execution_id.clone(),
                         format!("{:?}", key),
-                        AuditTaskResultStatus::DIFFERENT,
+                        AuditTaskResultStatus::Different,
                     )
                 } else {
                     AuditTaskResultClickhouseDao::new(
@@ -249,14 +247,14 @@ async fn compare(
                         audit_task_id,
                         execution_id.clone(),
                         format!("{:?}", key),
-                        AuditTaskResultStatus::DIFFERENT,
+                        AuditTaskResultStatus::Different,
                     )
                 };
                 res.push(dao);
             }
         } else {
-            let source_str = BASE64_STANDARD.encode(format!("{:?}", value));
-            let dst_str = BASE64_STANDARD.encode("".to_string());
+            let source_str = format!("{:?}", value);
+            let dst_str = "".to_string();
             let dao = if main_flag {
                 AuditTaskResultClickhouseDao::new(
                     source_str,
@@ -264,7 +262,7 @@ async fn compare(
                     audit_task_id,
                     execution_id.clone(),
                     format!("{:?}", key),
-                    AuditTaskResultStatus::DIFFERENT,
+                    AuditTaskResultStatus::Different,
                 )
             } else {
                 AuditTaskResultClickhouseDao::new(
@@ -273,7 +271,7 @@ async fn compare(
                     audit_task_id,
                     execution_id.clone(),
                     format!("{:?}", key),
-                    AuditTaskResultStatus::DIFFERENT,
+                    AuditTaskResultStatus::Different,
                 )
             };
             res.push(dao);
@@ -289,12 +287,12 @@ async fn get_all_data(
 ) -> Result<HashMap<Value, LinkedList<Value>>, anyhow::Error> {
     let mut hash_map = HashMap::new();
     let results = sqlx::query(&sql).fetch_all(mysql_connection).await?;
-    for (_, iterate) in results.iter().enumerate() {
+    for (_, iterate) in Iterator::enumerate(results.iter()) {
         let mut linked_list = LinkedList::new();
         let mut primary_value = Value::Null;
         for (index, column) in iterate.columns().iter().enumerate() {
             let raw_value = iterate.try_get_raw(index)?;
-            let value = parse_value(raw_value).await;
+            let value = parse_value(raw_value);
             linked_list.push_back(value.clone());
             if column.name() == primary_key {
                 primary_value = value;
@@ -319,14 +317,14 @@ async fn get_one(
             let mut linked_list = LinkedList::new();
             for (index, _) in iterate.columns().iter().enumerate() {
                 let raw_value = iterate.try_get_raw(index)?;
-                let value = parse_value(raw_value).await;
+                let value = parse_value(raw_value);
                 linked_list.push_back(value.clone());
             }
             Ok(Some(linked_list))
         }
     }
 }
-async fn parse_value<'r>(raw_value: MySqlValueRef<'r>) -> Value {
+fn parse_value(raw_value: MySqlValueRef<'_>) -> Value {
     if raw_value.is_null() {
         return Value::Null;
     }
