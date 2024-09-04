@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS tuna.audit_task_result (
     primary_id String DEFAULT '',
     left_compare String DEFAULT '',
     right_compare String DEFAULT '',
+    is_same UInt32 DEFAULT 0,
     timestamp DateTime DEFAULT now()
 ) ENGINE = ReplacingMergeTree ()
 ORDER BY (execution_id, primary_id);

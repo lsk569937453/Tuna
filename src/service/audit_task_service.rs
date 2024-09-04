@@ -1,6 +1,7 @@
 use crate::common::app_state::AppState;
 use crate::dao::audit_task_dao::AuditTaskDao;
 use crate::dao::audit_task_result_clickhouse_dao::AuditTaskResultClickhouseDao;
+use crate::dao::audit_task_result_clickhouse_dao::AuditTaskResultStatus;
 use crate::dao::audit_task_result_dao::AuditTaskResultDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
@@ -156,6 +157,7 @@ async fn do_execute(
         execution_id.clone(),
     )
     .await?;
+    let left_is_empty = left_compare.is_empty();
     AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client.clone(), left_compare)
         .await?;
     let right_compare = compare(
@@ -169,10 +171,31 @@ async fn do_execute(
         table_mapping_item.from_table_name.clone(),
         false,
         audit_task_id as u32,
-        execution_id,
+        execution_id.clone(),
     )
     .await?;
-    AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client, right_compare).await?;
+    let right_is_empty = right_compare.is_empty();
+
+    AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client.clone(), right_compare)
+        .await?;
+    info!(
+        "left_is_empty:{:?},right_is_empty:{}",
+        left_is_empty, right_is_empty
+    );
+    if left_is_empty && right_is_empty {
+        info!("left and right is empty");
+        let default_row = AuditTaskResultClickhouseDao::new(
+            "".to_string(),
+            "".to_string(),
+            audit_task_id as u32,
+            execution_id.clone(),
+            "null".to_string(),
+            AuditTaskResultStatus::SAME,
+        );
+        info!("default_row: {}", serde_json::to_string(&default_row)?);
+        AuditTaskResultClickhouseDao::insert_batch(app_state.clickhouse_client, vec![default_row])
+            .await?;
+    }
 
     Ok(())
 }
@@ -217,6 +240,7 @@ async fn compare(
                         audit_task_id,
                         execution_id.clone(),
                         format!("{:?}", key),
+                        AuditTaskResultStatus::DIFFERENT,
                     )
                 } else {
                     AuditTaskResultClickhouseDao::new(
@@ -225,6 +249,7 @@ async fn compare(
                         audit_task_id,
                         execution_id.clone(),
                         format!("{:?}", key),
+                        AuditTaskResultStatus::DIFFERENT,
                     )
                 };
                 res.push(dao);
@@ -239,6 +264,7 @@ async fn compare(
                     audit_task_id,
                     execution_id.clone(),
                     format!("{:?}", key),
+                    AuditTaskResultStatus::DIFFERENT,
                 )
             } else {
                 AuditTaskResultClickhouseDao::new(
@@ -247,6 +273,7 @@ async fn compare(
                     audit_task_id,
                     execution_id.clone(),
                     format!("{:?}", key),
+                    AuditTaskResultStatus::DIFFERENT,
                 )
             };
             res.push(dao);

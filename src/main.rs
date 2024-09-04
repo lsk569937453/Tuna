@@ -49,6 +49,8 @@ extern crate tracing;
 extern crate anyhow;
 #[macro_use]
 extern crate serde_json;
+#[macro_use]
+extern crate time;
 use clap::Subcommand;
 
 #[derive(Parser)]
