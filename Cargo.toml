@@ -26,7 +26,12 @@ chrono = { version = "0.4.38", features = ["serde"] } # "0.4.38"
 futures = "0.3.30"
 moka = { version = "0.12", features = ["future"] }
 axum = "0.7.5"
-time = { version = "0.3.4", features = ["serde"] }
+time = { version = "0.3.4", features = [
+    "serde",
+    "local-offset",
+    "serde-human-readable",
+    "macros",
+] }
 
 mysql_async = { version = "0.34.2", features = ["binlog"] }
 tracing = { version = "0.1" }
@@ -42,4 +47,6 @@ redis = { version = "0.26.1", features = ["cluster-async", "tokio-comp"] }
 sqlparser = "0.50.0"
 rs-snowflake = "0.6.0"
 local-ip-address = "0.6.2"
-clickhouse = "0.12.2"
+clickhouse = { version = "0.11.6", features = ["time"] }
+base64 = "0.22.1"
+serde_repr = "0.1.19"

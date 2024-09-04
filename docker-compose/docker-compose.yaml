@@ -40,7 +40,7 @@ services:
     container_name: clickhouse
     environment:
       # Default user and database will be created using `init-defaults.sh` script
-      CLICKHOUSE_DB: my_db_name
+      CLICKHOUSE_DB: tuna
       CLICKHOUSE_USER: clickhouse-user
       CLICKHOUSE_PASSWORD: secret
     ports:

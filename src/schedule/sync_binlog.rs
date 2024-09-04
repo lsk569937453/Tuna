@@ -28,7 +28,6 @@ pub async fn sync_binlog_with_error(
             }
         }
     }
-    Ok(())
 }
 #[instrument(skip(cluster_connection))]
 async fn send_heartbeat_with_error(
