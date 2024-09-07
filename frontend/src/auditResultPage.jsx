@@ -6,6 +6,7 @@ import Request from "./utils/axiosUtils";
 import { useEffect, useState } from "react"; import BatteryGauge from 'react-battery-gauge'
 import moment from 'moment';
 import 'react-toastify/dist/ReactToastify.css';
+import { useSearchParams } from 'react-router-dom';
 
 import { ToastContainer, toast } from 'react-toastify';
 
@@ -19,28 +20,37 @@ function AuditResultPage() {
     //0代表插入，1代表更新
     const [modalType, setModalType] = useState(0);
     const [taskTableData, setTaskTableData] = useState([]);
-
+    const [searchParams] = useSearchParams();
+    const auditTaskId = searchParams.get('auditTaskId');
     useEffect(() => {
-        getTaskList();
+        if (auditTaskId)
+            getTaskList();
     }, []);
 
 
     const getTaskList = () => {
-        Request.get("/api/auditTask").then((res) => {
+        Request.get("/api/auditTaskResult/" + auditTaskId).then((res) => {
             console.log(res);
             const mesArray = res.data.message.map(
                 ({
                     id: id,
-                    task_id: task_id,
-                    status: status,
-
+                    audit_task_id: audit_task_id,
+                    execution_id: execution_id,
+                    primary_id: primary_id,
+                    left_compare: left_compare,
+                    right_compare: right_compare,
+                    is_same: is_same,
                     timestamp: timestamp
 
                 }) => {
                     return {
                         id,
-                        task_id,
-                        status,
+                        audit_task_id,
+                        execution_id,
+                        primary_id,
+                        left_compare,
+                        right_compare,
+                        is_same,
                         timestamp
 
                     };
@@ -107,12 +117,10 @@ function AuditResultPage() {
         })
     }
     const statusText = (status) => {
-        if (status == 1) {
-            return "运行中";
-        } else if (status == 2) {
-            return "执行完成";
-        } else if (status == 0) {
-            return "未开始";
+        if (status == 0) {
+            return "相同";
+        } else {
+            return "不相同";
         }
     }
     return (
@@ -121,58 +129,35 @@ function AuditResultPage() {
             <div className="p-4 flex-col">
                 <div className="mb-4 flex justify-center">
 
-                    <Button onClick={() => setOpenModal(true)}>添加稽核任务</Button>
                     <ToastContainer />
 
-                    <Modal dismissible show={openModal} onClose={() => setOpenModal(false)} >
-                        <div className="flex flex-col items-center gap-4 p-5 ">
-                            <div className="flex items-center w-full">
-                                <span className="mr-2 basis-1/3 text-right	">数据源名称:</span>
-                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源名称" required
-                                    onChange={(e) => setDatasourceName(e.target.value)}
-                                    value={datasourceName}
-                                />
-                            </div>
-                            <div className="flex items-center   w-full">
-                                <span className="mr-2 basis-1/3 text-right	">数据源地址:</span>
-                                <input type="text" className="basis-1/3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="数据源地址" required
-                                    onChange={(e) => setDatasourceUrl(e.target.value)}
-                                    value={datasourceUrl}
 
-                                />
-                            </div>
-
-                            <div className="flex items-center  w-full">
-                                <div className="mr-2  basis-1/3">
-                                </div>
-                                {modalType == 0 &&
-                                    <Button className="basis-1/3" onClick={addDatasource}>添加</Button>}
-                                {modalType == 1 &&
-                                    <Button className="basis-1/3" onClick={confirmEditFurnace}>更新</Button>}
-                            </div>
-                        </div>
-
-                    </Modal>
                 </div>
                 <Table>
                     <Table.Head>
-                        <Table.HeadCell className="font-bold text-center text-xl">id</Table.HeadCell>
-                        <Table.HeadCell className="font-bold text-center text-xl">任务id</Table.HeadCell>
-                        <Table.HeadCell className="font-bold text-center text-xl">状态</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">稽核任务id</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">批次id</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">主键</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">主表</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">迁移表</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">是否一致</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">时间</Table.HeadCell>
 
                     </Table.Head>
                     <Table.Body className="divide-y">
                         {taskTableData.map((row, index) => (
                             <Table.Row className="bg-white dark:border-gray-700 dark:bg-gray-800" key={index}>
-                                <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white text-center">
-                                    {row.id}
-                                </Table.Cell>
-                                <Table.Cell className="text-center">  {row.task_id}</Table.Cell>
-                                <Table.Cell className="text-center">  {statusText(row.status)}</Table.Cell>
+
+                                <Table.Cell className="text-center">  {row.audit_task_id}</Table.Cell>
+                                <Table.Cell className="text-center">  {row.execution_id}</Table.Cell>
+                                <Table.Cell className="text-center">  {row.primary_id}</Table.Cell>
+                                <Table.Cell className="text-center">  {row.left_compare}</Table.Cell>
+                                <Table.Cell className="text-center">  {row.right_compare}</Table.Cell>
+
+                                <Table.Cell className="text-center">  {statusText(row.is_same)}</Table.Cell>
                                 <Table.Cell className="text-center">  {row.timestamp}</Table.Cell>
 
-                                <Table.Cell className="text-center">
+                                {/* <Table.Cell className="text-center">
                                     <div className="flex flex-row space-x-4">
                                         <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
                                             onClick={() => deleteTask(row.id)}>
@@ -184,7 +169,7 @@ function AuditResultPage() {
                                             执行
                                         </a>
                                     </div>
-                                </Table.Cell>
+                                </Table.Cell> */}
 
                             </Table.Row>
                         ))}
