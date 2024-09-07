@@ -60,34 +60,25 @@ function HomePage() {
                     <Sidebar theme={customTheme}>
                         <Sidebar.Items>
                             <Sidebar.ItemGroup >
-                                <Link to="/dashboard" >
-                                    <Sidebar.Item icon={HiChartPie} >
-                                        表盘
-                                    </Sidebar.Item>
-                                </Link>
-                                <Link to="/taskPage" >
+                                <Sidebar.Item icon={HiChartPie} onClick={() => navigate('/dashboard')}>
+                                    表盘
+                                </Sidebar.Item>
 
-                                    <Sidebar.Item icon={HiViewBoards} labelColor="dark" >
-                                        任务管理
-                                    </Sidebar.Item>
-                                </Link>
+                                <Sidebar.Item icon={HiViewBoards} onClick={() => navigate('/taskPage')} labelColor="dark">
+                                    任务管理
+                                </Sidebar.Item>
 
-                                <Link to="/datasourcePage" >
-                                    <Sidebar.Item icon={HiChip} >
-                                        数据源管理
-                                    </Sidebar.Item>
-                                </Link>
-                                <Link to="/auditPage" >
-                                    <Sidebar.Item icon={HiChip} >
-                                        稽核管理
-                                    </Sidebar.Item>
-                                </Link>
+                                <Sidebar.Item icon={HiChip} onClick={() => navigate('/datasourcePage')}>
+                                    数据源管理
+                                </Sidebar.Item>
 
-                                <Link to="/auditResultPage" >
-                                    <Sidebar.Item icon={HiChip} >
-                                        稽核结果
-                                    </Sidebar.Item>
-                                </Link>
+                                <Sidebar.Item icon={HiChip} onClick={() => navigate('/auditPage')}>
+                                    稽核管理
+                                </Sidebar.Item>
+
+                                <Sidebar.Item icon={HiChip} onClick={() => navigate('/auditResultPage')}>
+                                    稽核结果
+                                </Sidebar.Item>
 
                             </Sidebar.ItemGroup>
                         </Sidebar.Items>

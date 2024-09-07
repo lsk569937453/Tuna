@@ -3,7 +3,9 @@ use common::init_clickhouse::init_clickhouse;
 use common::init_redis;
 
 use schedule::sync_redis::main_sync_redis_loop_with_error;
-use service::audit_task_result_service::get_audit_tasks_result;
+use service::audit_task_result_service::{
+    get_audit_tasks_result, get_audit_tasks_result_by_audit_task_id,
+};
 use service::audit_task_service::{
     create_audit_task, delete_audit_task_by_id, execute_audit_task, get_audit_tasks,
 };
@@ -38,7 +40,8 @@ use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlPoolOptions;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling;
+use tracing_appender::rolling::RollingFileAppender;
+use tracing_appender::rolling::{self, Rotation};
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -171,7 +174,12 @@ impl FormatTime for ShanghaiTime {
     }
 }
 fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
-    let app_file = rolling::daily("./logs", "access.log");
+    let app_file = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY) // rotate log files once every hour
+        .filename_prefix("access")
+        .filename_suffix("log")
+        .max_log_files(2)
+        .build("./logs")?;
     let (non_blocking_appender, guard) = NonBlockingBuilder::default()
         .buffered_lines_limit(10)
         .finish(app_file);
@@ -229,6 +237,10 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
         .route("/auditTask/:id", delete(delete_audit_task_by_id))
         .route("/auditTask/execute", post(execute_audit_task))
         .route("/auditTaskResult", get(get_audit_tasks_result))
+        .route(
+            "/auditTaskResult/:id",
+            get(get_audit_tasks_result_by_audit_task_id),
+        )
         .with_state(cloned_shared_state);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await?;

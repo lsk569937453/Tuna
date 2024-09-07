@@ -6,6 +6,7 @@ import Request from "./utils/axiosUtils";
 import { useEffect, useState } from "react"; import BatteryGauge from 'react-battery-gauge'
 import moment from 'moment';
 import 'react-toastify/dist/ReactToastify.css';
+import { useNavigate, NavLink } from "react-router-dom";
 
 import { ToastContainer, toast } from 'react-toastify';
 
@@ -18,6 +19,7 @@ function AuditPage() {
     //0代表插入，1代表更新
     const [modalType, setModalType] = useState(0);
     const [taskTableData, setTaskTableData] = useState([]);
+    const navigate = useNavigate();
 
     useEffect(() => {
         getTaskList();
@@ -113,6 +115,11 @@ function AuditPage() {
             return "未开始";
         }
     }
+    const handleClick = (auditTaskId) => {
+        navigate('/auditResultPage?auditTaskId=' + auditTaskId);
+    };
+
+
     return (
         <div className="flex flex-col">
 
@@ -151,6 +158,7 @@ function AuditPage() {
                         <Table.HeadCell className="font-bold text-center text-xl">任务id</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">状态</Table.HeadCell>
                         <Table.HeadCell className="font-bold text-center text-xl">时间</Table.HeadCell>
+                        <Table.HeadCell className="font-bold text-center text-xl">操作</Table.HeadCell>
 
                     </Table.Head>
                     <Table.Body className="divide-y">
@@ -164,7 +172,7 @@ function AuditPage() {
                                 <Table.Cell className="text-center">  {row.timestamp}</Table.Cell>
 
                                 <Table.Cell className="text-center">
-                                    <div className="flex flex-row space-x-4">
+                                    <div className="flex flex-row space-x-4 justify-center">
                                         <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
                                             onClick={() => deleteTask(row.id)}>
                                             删除
@@ -173,6 +181,11 @@ function AuditPage() {
                                             onClick={() => executeAuditTask(row.id)}
                                         >
                                             执行
+                                        </a>
+                                        <a href="#" className="font-medium text-cyan-600 hover:underline dark:text-cyan-500"
+                                            onClick={() => handleClick(row.id)}
+                                        >
+                                            查看
                                         </a>
                                     </div>
                                 </Table.Cell>

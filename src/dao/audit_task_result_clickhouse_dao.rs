@@ -1,3 +1,5 @@
+use crate::common::common_constants::COMMON_TIME_FORMAT;
+use crate::util::serialize_human_readable_time;
 use clickhouse::{Client, Row};
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
@@ -6,8 +8,6 @@ use std::fmt::Debug;
 use time::OffsetDateTime;
 use time::UtcOffset;
 use uuid::Uuid;
-
-use crate::common::common_constants::COMMON_TIME_FORMAT;
 
 // Define the struct corresponding to your table schema
 #[derive(Debug, Serialize, Deserialize, Row)]
@@ -19,8 +19,11 @@ pub struct AuditTaskResultClickhouseDao {
     pub left_compare: String,
     pub right_compare: String,
     pub is_same: AuditTaskResultStatus,
-    #[serde(skip_serializing)]
-    pub timestamp: chrono::NaiveDateTime,
+    #[serde(
+        skip_serializing,
+        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
+    )]
+    pub timestamp: OffsetDateTime,
 }
 #[repr(u32)]
 #[derive(Serialize_repr, Deserialize_repr, Debug)]
@@ -41,23 +44,7 @@ pub struct AuditTaskResultListDao {
     )]
     pub first_occurrence: OffsetDateTime,
 }
-fn serialize_human_readable_time<S>(time: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    // Get the local offset (e.g., UTC+2)
-    let local_offset = UtcOffset::current_local_offset().map_err(serde::ser::Error::custom)?;
-    // Convert the time to local time
-    let local_time = time.to_offset(local_offset);
 
-    // Format the time in a human-readable way
-
-    // Format the OffsetDateTime to a string
-    let time_str = local_time
-        .format(&COMMON_TIME_FORMAT)
-        .map_err(serde::ser::Error::custom)?;
-    serializer.serialize_str(&time_str)
-}
 impl AuditTaskResultClickhouseDao {
     pub fn new(
         left_compare: String,
@@ -74,7 +61,7 @@ impl AuditTaskResultClickhouseDao {
             audit_task_id,
             left_compare,
             right_compare,
-            timestamp: chrono::Utc::now().naive_utc(),
+            timestamp: OffsetDateTime::now_utc(),
             is_same,
         }
     }
@@ -103,6 +90,19 @@ impl AuditTaskResultClickhouseDao {
             .query("SELECT * FROM audit_task_result WHERE id = ?")
             .bind(id)
             .fetch_optional::<AuditTaskResultClickhouseDao>()
+            .await?;
+        Ok(result)
+    }
+    pub async fn get_by_audit_task_id(
+        client: Client,
+        audit_task_id: u32,
+    ) -> Result<Vec<AuditTaskResultClickhouseDao>, anyhow::Error> {
+        let result = client
+            .query(
+                "SELECT * FROM audit_task_result WHERE audit_task_id  = ? order by timestamp desc",
+            )
+            .bind(audit_task_id)
+            .fetch_all::<AuditTaskResultClickhouseDao>()
             .await?;
         Ok(result)
     }
