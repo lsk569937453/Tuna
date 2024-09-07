@@ -38,7 +38,8 @@ use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlPoolOptions;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling;
+use tracing_appender::rolling::RollingFileAppender;
+use tracing_appender::rolling::{self, Rotation};
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -171,7 +172,12 @@ impl FormatTime for ShanghaiTime {
     }
 }
 fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
-    let app_file = rolling::daily("./logs", "access.log");
+    let app_file = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY) // rotate log files once every hour
+        .filename_prefix("access")
+        .filename_suffix("log")
+        .max_log_files(2)
+        .build("./logs")?;
     let (non_blocking_appender, guard) = NonBlockingBuilder::default()
         .buffered_lines_limit(10)
         .finish(app_file);

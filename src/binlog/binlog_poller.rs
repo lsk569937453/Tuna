@@ -543,6 +543,7 @@ pub fn parse_column(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mysql_async::Value;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
     #[test]
