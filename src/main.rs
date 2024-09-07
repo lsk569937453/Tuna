@@ -3,7 +3,9 @@ use common::init_clickhouse::init_clickhouse;
 use common::init_redis;
 
 use schedule::sync_redis::main_sync_redis_loop_with_error;
-use service::audit_task_result_service::get_audit_tasks_result;
+use service::audit_task_result_service::{
+    get_audit_tasks_result, get_audit_tasks_result_by_audit_task_id,
+};
 use service::audit_task_service::{
     create_audit_task, delete_audit_task_by_id, execute_audit_task, get_audit_tasks,
 };
@@ -235,6 +237,10 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
         .route("/auditTask/:id", delete(delete_audit_task_by_id))
         .route("/auditTask/execute", post(execute_audit_task))
         .route("/auditTaskResult", get(get_audit_tasks_result))
+        .route(
+            "/auditTaskResult/:id",
+            get(get_audit_tasks_result_by_audit_task_id),
+        )
         .with_state(cloned_shared_state);
     let final_route = Router::new().nest("/api", app);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await?;

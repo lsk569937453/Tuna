@@ -180,6 +180,7 @@ async fn do_execute(
         "left_is_empty:{:?},right_is_empty:{}",
         left_is_empty, right_is_empty
     );
+    // 如果两边都是空的，那么表示本次稽核的数据都相同，则插入一条默认数据
     if left_is_empty && right_is_empty {
         info!("left and right is empty");
         let default_row = AuditTaskResultClickhouseDao::new(
@@ -187,7 +188,7 @@ async fn do_execute(
             "".to_string(),
             audit_task_id as u32,
             execution_id.clone(),
-            "null".to_string(),
+            "".to_string(),
             AuditTaskResultStatus::Same,
         );
         info!("default_row: {}", serde_json::to_string(&default_row)?);
