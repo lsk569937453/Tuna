@@ -3,7 +3,7 @@ use crate::dao::audit_task_result_clickhouse_dao::{
 };
 use crate::util::serialize_human_readable_time;
 
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use time::OffsetDateTime;
 #[derive(Debug, Serialize)]
 pub struct AuditTaskResultResponse {
