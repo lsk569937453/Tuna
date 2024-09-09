@@ -1,4 +1,3 @@
-use crate::common::common_constants::COMMON_TIME_FORMAT;
 use crate::util::serialize_human_readable_time;
 use clickhouse::{Client, Row};
 use serde::Serializer;
@@ -6,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::fmt::Debug;
 use time::OffsetDateTime;
-use time::UtcOffset;
 use uuid::Uuid;
 
 // Define the struct corresponding to your table schema

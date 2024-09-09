@@ -84,11 +84,11 @@ pub async fn test_binlog_with_realtime() -> Result<(), anyhow::Error> {
     println!("a1");
 
     let mut bin_log_name = "".to_string();
-    let mut bin_log_position = 0;
+    // let mut bin_log_position = 0;
     let mut current_table_map_event: Option<TableMapEvent> = None;
     let mut column_list = None;
     while let Some(Ok(event)) = stream.next().await {
-        bin_log_position = event.header().log_pos();
+        let bin_log_position = event.header().log_pos();
         let event_cloned = event.clone();
         let option_event_data = event_cloned.read_data()?;
         let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
