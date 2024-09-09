@@ -56,7 +56,7 @@ extern crate serde_json;
 use clap::Subcommand;
 
 #[derive(Parser)]
-#[command(name = "MyApp")]
+#[command(name = "Tuna")]
 #[command(about = "An application with multiple flags and arguments")]
 pub struct Cli {
     #[command(subcommand)]
