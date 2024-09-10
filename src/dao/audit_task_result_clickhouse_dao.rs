@@ -1,6 +1,5 @@
 use crate::util::serialize_human_readable_time;
 use clickhouse::{Client, Row};
-use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::fmt::Debug;

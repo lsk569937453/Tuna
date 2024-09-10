@@ -56,7 +56,7 @@ extern crate serde_json;
 use clap::Subcommand;
 
 #[derive(Parser)]
-#[command(name = "MyApp")]
+#[command(name = "Tuna")]
 #[command(about = "An application with multiple flags and arguments")]
 pub struct Cli {
     #[command(subcommand)]
@@ -92,10 +92,7 @@ async fn main_with_error() -> Result<(), anyhow::Error> {
     match cli.command.unwrap_or(Commands::Default) {
         Commands::Default => app_with_error().await,
         Commands::I { count } => create_data(count).await,
-        Commands::S => {
-            test_binlog_with_realtime().await
-            // Add your logic here
-        }
+        Commands::S => test_binlog_with_realtime().await,
     }
 }
 
@@ -164,12 +161,9 @@ struct ShanghaiTime;
 
 impl FormatTime for ShanghaiTime {
     fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        // Get the current time in UTC
         let utc_now = Utc::now();
-        // Convert to Asia/Shanghai timezone (UTC+8)
         let shanghai_tz = FixedOffset::east_opt(8 * 3600).expect("Unable to set timezone");
         let shanghai_now = utc_now.with_timezone(&shanghai_tz);
-        // Format the time
         write!(w, "{}", shanghai_now.format("%Y-%m-%d %H:%M:%S%.3f"))
     }
 }

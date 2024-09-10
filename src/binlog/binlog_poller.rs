@@ -260,13 +260,14 @@ impl BinlogPoller {
     async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<(), anyhow::Error> {
         for sql in sqls.iter() {
             info!("handle_sql sql:{}", sql);
-            sql.as_str().run(&mut self.to_mysql_connection).await?;
+            let _ = sql.as_str().run(&mut self.to_mysql_connection).await?;
             if sql == "COMMIT;" {
                 let gtid = self.gtid_from_binlog.clone();
                 let gtid_str = gtid.split(":").collect::<Vec<&str>>();
                 let task_id = self.task_dao.id;
                 let task_gtid_key = format!("{}{}", TASK_GID_KEY_TEMPLATE, task_id);
-                self.redis_cluster_connection
+                let _: () = self
+                    .redis_cluster_connection
                     .hset(task_gtid_key, gtid_str[0], gtid_str[1])
                     .await?;
             }
@@ -542,7 +543,6 @@ pub fn parse_column(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use mysql_async::Value;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;

@@ -35,10 +35,14 @@ async fn send_heartbeat_with_error(
     task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
     let task_info_key = format!("{}{}", TASK_INFO_KEY_TEMPLATE, task_dao.id);
-    cluster_connection
+    let _: () = cluster_connection
         .pexpire(task_info_key.clone(), 10000)
-        .await?;
-    let current_ttl: i32 = cluster_connection.pttl(task_info_key.clone()).await?;
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let current_ttl: i32 = cluster_connection
+        .pttl(task_info_key.clone())
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
     info!(
         "send_heartbeat success,task_id:{},current_ttl:{}ms",
         task_info_key, current_ttl
