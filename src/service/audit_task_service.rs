@@ -388,7 +388,6 @@ async fn delete_audit_task_by_id_with_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_direct_comparison_equal() {
