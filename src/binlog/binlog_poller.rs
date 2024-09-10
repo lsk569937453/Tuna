@@ -45,7 +45,6 @@ pub struct BinlogPoller {
     to_database_name: String,
     to_mysql_connection: Conn,
     gtid_from_binlog: String,
-    clickhouse_inserter: Inserter<SqlLogDao>,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -77,12 +76,7 @@ impl BinlogPoller {
     pub async fn start(
         task_dao: SyncTaskDao,
         cluster_connection: ClusterConnection,
-        clickhouse_client: Client,
     ) -> Result<Self, anyhow::Error> {
-        let inserter = clickhouse_client
-            .inserter("sql_logs")?
-            .with_timeouts(Some(Duration::from_secs(5)), Some(Duration::from_secs(20)))
-            .with_period(Some(Duration::from_secs(5)));
         let from_datasource_url = task_dao.clone().from_datasource_url;
         let mysql = Conn::new(Opts::from_url(&from_datasource_url)?).await?;
         let mut sids = vec![];
@@ -124,7 +118,6 @@ impl BinlogPoller {
             to_database_name,
             table_mapping_hash_map,
             gtid_from_binlog: String::new(),
-            clickhouse_inserter: inserter,
         };
         Ok(sel)
     }
@@ -141,7 +134,8 @@ impl BinlogPoller {
         Ok(conn)
     }
     #[instrument]
-    pub async fn poll(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn poll(&mut self) -> Result<Vec<SqlLogDao>, anyhow::Error> {
+        let mut sql_logs = vec![];
         if let Some(Ok(event)) = self.binlog_stream.next().await {
             self.current_binlog_position = event.header().log_pos();
             let event_cloned = event.clone();
@@ -160,7 +154,7 @@ impl BinlogPoller {
                         self.table_mapping_hash_map.clone(),
                         self.task_dao.from_database_name.clone(),
                     ) {
-                        return Ok(());
+                        return Ok(sql_logs);
                     }
 
                     let s = self.cache.get(&key).await;
@@ -191,7 +185,7 @@ impl BinlogPoller {
                         self.task_dao.from_database_name.clone(),
                     ) {
                         debug!("RowsEvent should not save",);
-                        return Ok(());
+                        return Ok(sql_logs);
                     }
                     let table_map_eventt = self.current_table_map_event.clone();
                     let data = table_map_eventt.ok_or(anyhow!(""))?;
@@ -245,12 +239,12 @@ impl BinlogPoller {
                 }
             };
             if let Some(sql) = sql {
-                self.handle_sql(sql).await?;
+                sql_logs = self.handle_sql(sql).await?;
             }
         } else {
             return Err(anyhow!("poll error"));
         }
-        Ok(())
+        Ok(sql_logs)
     }
     async fn parse_colomns(
         &mut self,
@@ -269,19 +263,15 @@ impl BinlogPoller {
         }
         Ok(res)
     }
-    async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<(), anyhow::Error> {
-        // let clickhouse_inserter = &self.clickhouse_inserter;
+    async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<Vec<SqlLogDao>, anyhow::Error> {
+        let mut sql_logs = vec![];
         for sql in sqls.iter() {
             info!("handle_sql sql:{}", sql);
             let now = Instant::now();
             let res = sql.as_str().run(&mut self.to_mysql_connection).await?;
             let elapsed = now.elapsed().as_millis();
             let sql_log = SqlLogDao::new(sql.clone(), format!("{:?}", res), elapsed as u64);
-            if let Err(e) =
-                SqlLogDao::insert_infinite_sql_log(&mut self.clickhouse_inserter, sql_log).await
-            {
-                error!("write clickhouse error:{:?}", e);
-            }
+            sql_logs.push(sql_log);
             if sql == "COMMIT;" {
                 let gtid = self.gtid_from_binlog.clone();
                 let gtid_str = gtid.split(":").collect::<Vec<&str>>();
@@ -293,7 +283,7 @@ impl BinlogPoller {
                     .await?;
             }
         }
-        Ok(())
+        Ok(sql_logs)
     }
 }
 fn should_save(
