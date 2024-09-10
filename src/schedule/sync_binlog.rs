@@ -7,16 +7,22 @@ use redis::{cluster_async::ClusterConnection, AsyncCommands};
 
 use std::time::Duration;
 use tokio::time::interval;
-#[instrument(name = "sync binlog", skip(cluster_connection, _app_state))]
+#[instrument(name = "sync binlog", skip(cluster_connection, app_state))]
 pub async fn sync_binlog_with_error(
     cluster_connection: &mut ClusterConnection,
-    _app_state: AppState,
+    app_state: AppState,
     task_dao: SyncTaskDao,
 ) -> Result<(), anyhow::Error> {
     let duration = 5000;
     let mut interval = interval(Duration::from_millis(duration));
-    let mut binlog_poller =
-        BinlogPoller::start(task_dao.clone(), cluster_connection.clone()).await?;
+
+    let mut binlog_poller = BinlogPoller::start(
+        task_dao.clone(),
+        cluster_connection.clone(),
+        app_state.clickhouse_client,
+    )
+    .await?;
+
     loop {
         let mut cloned_cluster_connection = cluster_connection.clone();
         tokio::select! {
@@ -29,7 +35,7 @@ pub async fn sync_binlog_with_error(
         }
     }
 }
-#[instrument(skip(cluster_connection))]
+#[instrument(name = "send_heartbeat", skip(cluster_connection))]
 async fn send_heartbeat_with_error(
     cluster_connection: &mut ClusterConnection,
     task_dao: SyncTaskDao,

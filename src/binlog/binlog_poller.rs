@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
 use crate::common::common_constants::TASK_GID_KEY_TEMPLATE;
+use crate::dao::sql_logs_dao::SqlLogDao;
 use crate::vojo::create_audit_task_req::TableMappingItem;
 use anyhow::anyhow;
+use clickhouse::inserter::Inserter;
+use clickhouse::Client;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::EventData;
@@ -17,6 +20,8 @@ use mysql_async::Opts;
 use mysql_async::{Conn, Sid};
 use redis::cluster_async::ClusterConnection;
 use redis::AsyncCommands;
+use std::time::Duration;
+use tokio::time::Instant;
 
 use sqlx::mysql::MySqlConnection;
 use sqlx::Connection;
@@ -40,6 +45,7 @@ pub struct BinlogPoller {
     to_database_name: String,
     to_mysql_connection: Conn,
     gtid_from_binlog: String,
+    clickhouse_inserter: Inserter<SqlLogDao>,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -71,7 +77,12 @@ impl BinlogPoller {
     pub async fn start(
         task_dao: SyncTaskDao,
         cluster_connection: ClusterConnection,
+        clickhouse_client: Client,
     ) -> Result<Self, anyhow::Error> {
+        let inserter = clickhouse_client
+            .inserter("sql_logs")?
+            .with_timeouts(Some(Duration::from_secs(5)), Some(Duration::from_secs(20)))
+            .with_period(Some(Duration::from_secs(5)));
         let from_datasource_url = task_dao.clone().from_datasource_url;
         let mysql = Conn::new(Opts::from_url(&from_datasource_url)?).await?;
         let mut sids = vec![];
@@ -113,6 +124,7 @@ impl BinlogPoller {
             to_database_name,
             table_mapping_hash_map,
             gtid_from_binlog: String::new(),
+            clickhouse_inserter: inserter,
         };
         Ok(sel)
     }
@@ -258,9 +270,18 @@ impl BinlogPoller {
         Ok(res)
     }
     async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<(), anyhow::Error> {
+        // let clickhouse_inserter = &self.clickhouse_inserter;
         for sql in sqls.iter() {
             info!("handle_sql sql:{}", sql);
-            let _ = sql.as_str().run(&mut self.to_mysql_connection).await?;
+            let now = Instant::now();
+            let res = sql.as_str().run(&mut self.to_mysql_connection).await?;
+            let elapsed = now.elapsed().as_millis();
+            let sql_log = SqlLogDao::new(sql.clone(), format!("{:?}", res), elapsed as u64);
+            if let Err(e) =
+                SqlLogDao::insert_infinite_sql_log(&mut self.clickhouse_inserter, sql_log).await
+            {
+                error!("write clickhouse error:{:?}", e);
+            }
             if sql == "COMMIT;" {
                 let gtid = self.gtid_from_binlog.clone();
                 let gtid_str = gtid.split(":").collect::<Vec<&str>>();
