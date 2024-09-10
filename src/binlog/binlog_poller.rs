@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
 use crate::common::common_constants::TASK_GID_KEY_TEMPLATE;
+use crate::dao::sql_logs_dao::SqlLogDao;
 use crate::vojo::create_audit_task_req::TableMappingItem;
 use anyhow::anyhow;
+use clickhouse::inserter::Inserter;
+use clickhouse::Client;
 use futures::StreamExt;
 use moka::future::Cache;
 use mysql_async::binlog::events::EventData;
@@ -17,6 +20,8 @@ use mysql_async::Opts;
 use mysql_async::{Conn, Sid};
 use redis::cluster_async::ClusterConnection;
 use redis::AsyncCommands;
+use std::time::Duration;
+use tokio::time::Instant;
 
 use sqlx::mysql::MySqlConnection;
 use sqlx::Connection;
@@ -129,7 +134,8 @@ impl BinlogPoller {
         Ok(conn)
     }
     #[instrument]
-    pub async fn poll(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn poll(&mut self) -> Result<Vec<SqlLogDao>, anyhow::Error> {
+        let mut sql_logs = vec![];
         if let Some(Ok(event)) = self.binlog_stream.next().await {
             self.current_binlog_position = event.header().log_pos();
             let event_cloned = event.clone();
@@ -148,7 +154,7 @@ impl BinlogPoller {
                         self.table_mapping_hash_map.clone(),
                         self.task_dao.from_database_name.clone(),
                     ) {
-                        return Ok(());
+                        return Ok(sql_logs);
                     }
 
                     let s = self.cache.get(&key).await;
@@ -179,7 +185,7 @@ impl BinlogPoller {
                         self.task_dao.from_database_name.clone(),
                     ) {
                         debug!("RowsEvent should not save",);
-                        return Ok(());
+                        return Ok(sql_logs);
                     }
                     let table_map_eventt = self.current_table_map_event.clone();
                     let data = table_map_eventt.ok_or(anyhow!(""))?;
@@ -233,12 +239,12 @@ impl BinlogPoller {
                 }
             };
             if let Some(sql) = sql {
-                self.handle_sql(sql).await?;
+                sql_logs = self.handle_sql(sql).await?;
             }
         } else {
             return Err(anyhow!("poll error"));
         }
-        Ok(())
+        Ok(sql_logs)
     }
     async fn parse_colomns(
         &mut self,
@@ -257,10 +263,15 @@ impl BinlogPoller {
         }
         Ok(res)
     }
-    async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<(), anyhow::Error> {
+    async fn handle_sql(&mut self, sqls: Vec<String>) -> Result<Vec<SqlLogDao>, anyhow::Error> {
+        let mut sql_logs = vec![];
         for sql in sqls.iter() {
             info!("handle_sql sql:{}", sql);
-            let _ = sql.as_str().run(&mut self.to_mysql_connection).await?;
+            let now = Instant::now();
+            let res = sql.as_str().run(&mut self.to_mysql_connection).await?;
+            let elapsed = now.elapsed().as_millis();
+            let sql_log = SqlLogDao::new(sql.clone(), format!("{:?}", res), elapsed as u64);
+            sql_logs.push(sql_log);
             if sql == "COMMIT;" {
                 let gtid = self.gtid_from_binlog.clone();
                 let gtid_str = gtid.split(":").collect::<Vec<&str>>();
@@ -272,7 +283,7 @@ impl BinlogPoller {
                     .await?;
             }
         }
-        Ok(())
+        Ok(sql_logs)
     }
 }
 fn should_save(
