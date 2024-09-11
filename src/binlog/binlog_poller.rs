@@ -24,6 +24,7 @@ use redis::cluster_async::ClusterConnection;
 use redis::AsyncCommands;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
+use time::OffsetDateTime;
 use tokio::time::Instant;
 
 use sqlx::mysql::MySqlConnection;
@@ -287,6 +288,7 @@ impl BinlogPoller {
                 mysql_execution_result.as_string()?,
                 elapsed as u64,
                 self.client_ip.clone(),
+                OffsetDateTime::now_local()?,
                 self.task_dao.id as u32,
             );
             sql_logs.push(sql_log);
