@@ -9,9 +9,9 @@ use service::audit_task_result_service::{
 use service::audit_task_service::{
     create_audit_task, delete_audit_task_by_id, execute_audit_task, get_audit_tasks,
 };
-use service::database_service::get_database_list;
 use service::datasource_service::{
     create_datasource, delete_datasource_by_id, get_datasource_list,
+    get_primary_key_by_datasource_id,
 };
 mod common;
 mod dao;
@@ -219,11 +219,12 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
             "/datasource",
             post(create_datasource).get(get_datasource_list),
         )
-        .route("/datasource/:id/database/:name/tables", get(get_table_list))
+        .route("/datasource/:id/tables", get(get_table_list))
         .route(
-            "/datasource/:id",
-            get(get_database_list).delete(delete_datasource_by_id),
+            "/datasource/:id/table/:table_name",
+            get(get_primary_key_by_datasource_id),
         )
+        .route("/datasource/:id", delete(delete_datasource_by_id))
         .route("/syncTask", post(create_task).get(get_task_list))
         .route("/syncTask/status/:id", get(get_sync_task_status_by_id))
         .route("/syncTask/:id", delete(delete_sync_task_by_id))

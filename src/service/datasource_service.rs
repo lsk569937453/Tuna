@@ -9,6 +9,9 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
 use sqlx::mysql::MySqlConnectOptions;
+use sqlx::Connection;
+use sqlx::MySqlConnection;
+use sqlx::Row;
 use std::convert::Infallible;
 use std::str::FromStr;
 pub async fn create_datasource(
@@ -65,5 +68,39 @@ async fn delete_datasource_by_id_with_error(
         response_code: 0,
         response_object: 0,
     };
+    serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
+}
+pub async fn get_primary_key_by_datasource_id(
+    State(state): State<AppState>,
+    Path((data, table_name)): Path<(i32, String)>,
+) -> Result<Response, Infallible> {
+    handle_response!(get_primary_key_by_id_with_error(state, data, table_name).await)
+}
+async fn get_primary_key_by_id_with_error(
+    app_state: AppState,
+    datasource_id: i32,
+    table_name: String,
+) -> Result<String, anyhow::Error> {
+    let datasource_url = DataSourceDao::find_by_id(&app_state.db_pool, datasource_id)
+        .await?
+        .datasource_url;
+    let mut conn = MySqlConnection::connect(&datasource_url).await?;
+    let sql = "SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = ?
+  AND COLUMN_KEY = 'PRI';";
+    let sql_rows = sqlx::query(sql)
+        .bind(table_name)
+        .fetch_optional(&mut conn)
+        .await?
+        .ok_or(anyhow!("no primary key found"))?;
+
+    let item: Vec<u8> = sql_rows.try_get::<Vec<u8>, _>(0)?;
+    let column_name = String::from_utf8(item)?;
+    let data = BaseResponse {
+        response_code: 0,
+        response_object: column_name,
+    };
+
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
