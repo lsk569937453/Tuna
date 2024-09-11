@@ -146,113 +146,119 @@ impl BinlogPoller {
     #[instrument]
     pub async fn poll(&mut self) -> Result<Vec<SqlLogDao>, anyhow::Error> {
         let mut sql_logs = vec![];
-        if let Some(Ok(event)) = self.binlog_stream.next().await {
-            self.current_binlog_position = event.header().log_pos();
-            let event_cloned = event.clone();
-            let option_event_data = event_cloned.read_data()?;
-            let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
-            debug!("event_data: {:?}", event_data);
-            let sql = match event_data {
-                EventData::TableMapEvent(table_map_event) => {
-                    let db_name = table_map_event.database_name().clone();
-                    let table_name = table_map_event.table_name().clone();
-                    let key = format!("{}{}", db_name, table_name);
-                    self.current_table_map_event = Some(table_map_event.clone().into_owned());
+        match self.binlog_stream.next().await {
+            Some(Ok(event)) => {
+                self.current_binlog_position = event.header().log_pos();
+                let event_cloned = event.clone();
+                let option_event_data = event_cloned.read_data()?;
+                let event_data = option_event_data.ok_or(anyhow!("Read data error"))?;
+                debug!("event_data: {:?}", event_data);
+                let sql = match event_data {
+                    EventData::TableMapEvent(table_map_event) => {
+                        let db_name = table_map_event.database_name().clone();
+                        let table_name = table_map_event.table_name().clone();
+                        let key = format!("{}{}", db_name, table_name);
+                        self.current_table_map_event = Some(table_map_event.clone().into_owned());
 
-                    if !should_save(
-                        self.current_table_map_event.clone(),
-                        self.table_mapping_hash_map.clone(),
-                        self.task_dao.from_database_name.clone(),
-                    ) {
-                        return Ok(sql_logs);
+                        if !should_save(
+                            self.current_table_map_event.clone(),
+                            self.table_mapping_hash_map.clone(),
+                            self.task_dao.from_database_name.clone(),
+                        ) {
+                            return Ok(sql_logs);
+                        }
+
+                        let s = self.cache.get(&key).await;
+
+                        //可能查询很多次
+                        let current_column_list = if let Some(v) = s {
+                            v
+                        } else {
+                            let v = self
+                                .parse_colomns(
+                                    db_name.to_string().clone(),
+                                    table_name.to_string().clone(),
+                                )
+                                .await?;
+                            self.cache
+                                .insert(db_name.to_string().clone(), v.clone())
+                                .await;
+                            v
+                        };
+
+                        self.column_list = Some(current_column_list);
+                        None
+                    }
+                    EventData::RowsEvent(rows_event_data) => {
+                        if !should_save(
+                            self.current_table_map_event.clone(),
+                            self.table_mapping_hash_map.clone(),
+                            self.task_dao.from_database_name.clone(),
+                        ) {
+                            debug!("RowsEvent should not save",);
+                            return Ok(sql_logs);
+                        }
+                        let table_map_eventt = self.current_table_map_event.clone();
+                        let data = table_map_eventt.ok_or(anyhow!(""))?;
+                        let column_list = self.column_list.clone().ok_or(anyhow!(""))?;
+                        let to_database_name = self.to_database_name.clone();
+                        let table_mapping_hash_map = self.table_mapping_hash_map.clone();
+                        let sql = parse_sql_with_error(
+                            rows_event_data,
+                            data.clone(),
+                            column_list,
+                            to_database_name,
+                            table_mapping_hash_map,
+                        )
+                        .await?;
+                        Some(sql)
+                    }
+                    EventData::QueryEvent(query_event) => {
+                        let sql = String::from_utf8_lossy(query_event.query_raw());
+                        if sql != "BEGIN" {
+                            Some(vec!["COMMIT;".to_string()])
+                        } else {
+                            Some(vec![sql.to_string()])
+                        }
+                    }
+                    EventData::RowsQueryEvent(rows_query_event) => {
+                        info!("{:?}", rows_query_event);
+                        None
+                    }
+                    EventData::TransactionPayloadEvent(transaction_payload_event) => {
+                        info!("{:?}", transaction_payload_event);
+                        None
                     }
 
-                    let s = self.cache.get(&key).await;
-
-                    //可能查询很多次
-                    let current_column_list = if let Some(v) = s {
-                        v
-                    } else {
-                        let v = self
-                            .parse_colomns(
-                                db_name.to_string().clone(),
-                                table_name.to_string().clone(),
-                            )
-                            .await?;
-                        self.cache
-                            .insert(db_name.to_string().clone(), v.clone())
-                            .await;
-                        v
-                    };
-
-                    self.column_list = Some(current_column_list);
-                    None
-                }
-                EventData::RowsEvent(rows_event_data) => {
-                    if !should_save(
-                        self.current_table_map_event.clone(),
-                        self.table_mapping_hash_map.clone(),
-                        self.task_dao.from_database_name.clone(),
-                    ) {
-                        debug!("RowsEvent should not save",);
-                        return Ok(sql_logs);
+                    EventData::GtidEvent(gtid_event) => {
+                        let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
+                        let gtid_sql = format!(r#"set gtid_next='{}:{}';"#, gtid, gtid_event.gno());
+                        self.gtid_from_binlog = format!("{}:{}", gtid, gtid_event.gno());
+                        Some(vec![gtid_sql])
                     }
-                    let table_map_eventt = self.current_table_map_event.clone();
-                    let data = table_map_eventt.ok_or(anyhow!(""))?;
-                    let column_list = self.column_list.clone().ok_or(anyhow!(""))?;
-                    let to_database_name = self.to_database_name.clone();
-                    let table_mapping_hash_map = self.table_mapping_hash_map.clone();
-                    let sql = parse_sql_with_error(
-                        rows_event_data,
-                        data.clone(),
-                        column_list,
-                        to_database_name,
-                        table_mapping_hash_map,
-                    )
-                    .await?;
-                    Some(sql)
-                }
-                EventData::QueryEvent(query_event) => {
-                    let sql = String::from_utf8_lossy(query_event.query_raw());
-                    if sql != "BEGIN" {
-                        Some(vec!["COMMIT;".to_string()])
-                    } else {
-                        Some(vec![sql.to_string()])
+                    EventData::XidEvent(_) => Some(vec!["COMMIT;".to_string()]),
+                    EventData::RotateEvent(rotate_event) => {
+                        self.current_binlog_name = rotate_event.name().to_string();
+                        info!("rotate_event>>>{:?}", rotate_event);
+                        None
                     }
+                    EventData::HeartbeatEvent => None,
+                    EventData::FormatDescriptionEvent(_) => None,
+                    _ => {
+                        info!("other>>>>>{:?}", event_data);
+                        None
+                    }
+                };
+                if let Some(sql) = sql {
+                    sql_logs = self.handle_sql(sql).await?;
                 }
-                EventData::RowsQueryEvent(rows_query_event) => {
-                    info!("{:?}", rows_query_event);
-                    None
-                }
-                EventData::TransactionPayloadEvent(transaction_payload_event) => {
-                    info!("{:?}", transaction_payload_event);
-                    None
-                }
-
-                EventData::GtidEvent(gtid_event) => {
-                    let gtid = uuid::Uuid::from_bytes(gtid_event.sid());
-                    let gtid_sql = format!(r#"set gtid_next='{}:{}';"#, gtid, gtid_event.gno());
-                    self.gtid_from_binlog = format!("{}:{}", gtid, gtid_event.gno());
-                    Some(vec![gtid_sql])
-                }
-                EventData::XidEvent(_) => Some(vec!["COMMIT;".to_string()]),
-                EventData::RotateEvent(rotate_event) => {
-                    self.current_binlog_name = rotate_event.name().to_string();
-                    info!("rotate_event>>>{:?}", rotate_event);
-                    None
-                }
-                EventData::HeartbeatEvent => None,
-                EventData::FormatDescriptionEvent(_) => None,
-                _ => {
-                    info!("other>>>>>{:?}", event_data);
-                    None
-                }
-            };
-            if let Some(sql) = sql {
-                sql_logs = self.handle_sql(sql).await?;
             }
-        } else {
-            return Err(anyhow!("poll error"));
+            Some(Err(e)) => {
+                return Err(anyhow!("Poll error:{}", e));
+            }
+            None => {
+                info!("Poll none.");
+            }
         }
         Ok(sql_logs)
     }
