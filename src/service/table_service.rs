@@ -13,21 +13,20 @@ use sqlx::Row;
 use std::convert::Infallible;
 pub async fn get_table_list(
     State(state): State<AppState>,
-    Path((data, database_name)): Path<(i32, String)>,
+    Path(data): Path<i32>,
 ) -> Result<Response, Infallible> {
-    handle_response!(get_table_list_with_error(state, data, database_name).await)
+    handle_response!(get_table_list_with_error(state, data).await)
 }
 async fn get_table_list_with_error(
     app_state: AppState,
     datasource_id: i32,
-    database_name: String,
 ) -> Result<String, anyhow::Error> {
     let datasource_url = DataSourceDao::find_by_id(&app_state.db_pool, datasource_id)
         .await?
         .datasource_url;
     let mut conn = MySqlConnection::connect(&datasource_url).await?;
-    let sql = format!("show tables in {}", database_name);
-    let sql_rows = sqlx::query(&sql).fetch_all(&mut conn).await?;
+    let sql = "show tables;";
+    let sql_rows = sqlx::query(sql).fetch_all(&mut conn).await?;
 
     let mut res = vec![];
     for it in sql_rows.iter() {
