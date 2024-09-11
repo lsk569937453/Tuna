@@ -14,8 +14,13 @@ pub struct SqlLogDao {
     pub client_ip: String,
     pub sync_task_id: u32,
     #[serde(
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize",
+        serialize_with = "clickhouse::serde::time::datetime64::millis::serialize"
+    )]
+    pub sql_timestamp: OffsetDateTime,
+    #[serde(
         skip_serializing,
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
     )]
     pub timestamp: OffsetDateTime,
 }
@@ -65,6 +70,7 @@ impl SqlLogDao {
         result: String,
         execution_time: u64,
         client_ip: String,
+        sql_timestamp: OffsetDateTime,
         sync_task_id: u32,
     ) -> Self {
         Self {
@@ -75,6 +81,7 @@ impl SqlLogDao {
             timestamp: OffsetDateTime::now_utc(),
             client_ip,
             sync_task_id,
+            sql_timestamp,
         }
     }
 

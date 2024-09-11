@@ -18,7 +18,7 @@ pub struct AuditTaskResultClickhouseDao {
     pub is_same: AuditTaskResultStatus,
     #[serde(
         skip_serializing,
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
     )]
     pub timestamp: OffsetDateTime,
 }
@@ -37,7 +37,7 @@ pub struct AuditTaskResultListDao {
     pub is_same: AuditTaskResultStatus,
     #[serde(
         serialize_with = "serialize_human_readable_time",
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
     )]
     pub first_occurrence: OffsetDateTime,
 }
