@@ -15,6 +15,10 @@ use service::datasource_service::{
 };
 mod common;
 mod dao;
+use service::sql_log_service::{
+    get_sql_logs_per_day, get_sql_logs_per_day_groupby_sync_task_id, get_sql_logs_per_minute,
+    get_sql_logs_per_minute_groupby_sync_task_id,
+};
 use service::sync_task_servivce::{
     create_task, delete_sync_task_by_id, get_sync_task_status_by_id, get_task_list,
 };
@@ -235,6 +239,16 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
         .route(
             "/auditTaskResult/:id",
             get(get_audit_tasks_result_by_audit_task_id),
+        )
+        .route("/sqlLogs/perMinute", get(get_sql_logs_per_minute))
+        .route("/sqlLogs/perDay", get(get_sql_logs_per_day))
+        .route(
+            "/sqlLogs/perMinuteTaskId",
+            get(get_sql_logs_per_minute_groupby_sync_task_id),
+        )
+        .route(
+            "/sqlLogs/perDayTaskId",
+            get(get_sql_logs_per_day_groupby_sync_task_id),
         )
         .with_state(cloned_shared_state);
     let final_route = Router::new().nest("/api", app);

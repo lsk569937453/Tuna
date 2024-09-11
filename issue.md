@@ -3,3 +3,5 @@
 3.dashboard展示sql_logs中的统计数据
 4.前端交互优化,自动查询
 5.监控
+6.github actions
+7.所有的日志入clickhouse

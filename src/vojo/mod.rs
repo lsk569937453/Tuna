@@ -6,5 +6,7 @@ pub mod create_datasource_req;
 pub mod get_audit_task_result_by_audit_task_id_res;
 pub mod get_datasource_list_response;
 pub mod id_req;
+pub mod logs_per_day_groupby_sync_task_id;
+pub mod logs_per_minute_groupby_sync_task_id;
 pub mod mysql_execution_result;
 pub mod sync_task_status_res;
