@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use crate::common::common_constants::TASK_GID_KEY_TEMPLATE;
 use crate::dao::sql_logs_dao::SqlLogDao;
 use crate::vojo::create_audit_task_req::TableMappingItem;
+use crate::vojo::mysql_execution_result;
+use crate::vojo::mysql_execution_result::MysqlExecutionResult;
 use anyhow::anyhow;
-use clickhouse::inserter::Inserter;
-use clickhouse::Client;
+
 use futures::StreamExt;
+use local_ip_address::local_ip;
 use moka::future::Cache;
 use mysql_async::binlog::events::EventData;
 use mysql_async::binlog::events::TableMapEvent;
@@ -20,7 +22,8 @@ use mysql_async::Opts;
 use mysql_async::{Conn, Sid};
 use redis::cluster_async::ClusterConnection;
 use redis::AsyncCommands;
-use std::time::Duration;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use tokio::time::Instant;
 
 use sqlx::mysql::MySqlConnection;
@@ -45,6 +48,7 @@ pub struct BinlogPoller {
     to_database_name: String,
     to_mysql_connection: Conn,
     gtid_from_binlog: String,
+    client_ip: String,
 }
 //impl debug for me
 impl std::fmt::Debug for BinlogPoller {
@@ -77,6 +81,10 @@ impl BinlogPoller {
         task_dao: SyncTaskDao,
         cluster_connection: ClusterConnection,
     ) -> Result<Self, anyhow::Error> {
+        let client_ip = local_ip()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+            .to_string();
+        info!("client_ip: {}", client_ip);
         let from_datasource_url = task_dao.clone().from_datasource_url;
         let mysql = Conn::new(Opts::from_url(&from_datasource_url)?).await?;
         let mut sids = vec![];
@@ -118,6 +126,7 @@ impl BinlogPoller {
             to_database_name,
             table_mapping_hash_map,
             gtid_from_binlog: String::new(),
+            client_ip,
         };
         Ok(sel)
     }
@@ -269,8 +278,17 @@ impl BinlogPoller {
             info!("handle_sql sql:{}", sql);
             let now = Instant::now();
             let res = sql.as_str().run(&mut self.to_mysql_connection).await?;
+            let mysql_execution_result =
+                MysqlExecutionResult::new(res.affected_rows(), res.last_insert_id());
+
             let elapsed = now.elapsed().as_millis();
-            let sql_log = SqlLogDao::new(sql.clone(), format!("{:?}", res), elapsed as u64);
+            let sql_log = SqlLogDao::new(
+                sql.clone(),
+                mysql_execution_result.as_string()?,
+                elapsed as u64,
+                self.client_ip.clone(),
+                self.task_dao.id as u32,
+            );
             sql_logs.push(sql_log);
             if sql == "COMMIT;" {
                 let gtid = self.gtid_from_binlog.clone();

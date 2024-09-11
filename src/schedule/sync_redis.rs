@@ -11,6 +11,8 @@ use redis::ExistenceCheck;
 use redis::SetOptions;
 use redis::Value;
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
 
 use std::time::Duration;
 use tokio::time::interval;
@@ -67,14 +69,16 @@ async fn sync_task_ids(
                 tokio::spawn(async move {
                     //获取到分布式锁的线程，先抢到锁，然后设置上task_info_key，再把锁释放掉
                     //然后进入事件循环
-                    let my_local_ip = local_ip().unwrap().to_string();
+                    let client_ip = local_ip()
+                        .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                        .to_string();
 
                     let set_options = SetOptions::default()
                         .conditional_set(ExistenceCheck::NX)
                         .with_expiration(redis::SetExpiry::PX(10000));
                     let operation_result: Result<Option<Value>, redis::RedisError> =
                         cloned_cluster_connection
-                            .set_options(task_info_key, my_local_ip, set_options)
+                            .set_options(task_info_key, client_ip, set_options)
                             .await;
                     match operation_result {
                         Ok(Some(Value::Okay)) => {

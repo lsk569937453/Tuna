@@ -224,7 +224,7 @@ async fn app_with_error() -> Result<(), anyhow::Error> {
             "/datasource/:id",
             get(get_database_list).delete(delete_datasource_by_id),
         )
-        .route("/task", post(create_task).get(get_task_list))
+        .route("/syncTask", post(create_task).get(get_task_list))
         .route("/syncTask/status/:id", get(get_sync_task_status_by_id))
         .route("/syncTask/:id", delete(delete_sync_task_by_id))
         .route("/auditTask", post(create_audit_task).get(get_audit_tasks))

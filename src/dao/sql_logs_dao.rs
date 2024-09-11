@@ -1,3 +1,4 @@
+use clap::builder::Str;
 use clickhouse::inserter::Inserter;
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,8 @@ pub struct SqlLogDao {
     pub query: String,
     pub result: String,
     pub execution_time: u64,
+    pub client_ip: String,
+    pub sync_task_id: u32,
     #[serde(
         skip_serializing,
         deserialize_with = "clickhouse::serde::time::datetime::deserialize"
@@ -17,20 +20,21 @@ pub struct SqlLogDao {
     pub timestamp: OffsetDateTime,
 }
 impl SqlLogDao {
-    pub fn new(query: String, result: String, execution_time: u64) -> Self {
+    pub fn new(
+        query: String,
+        result: String,
+        execution_time: u64,
+        client_ip: String,
+        sync_task_id: u32,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().as_u128(),
             query,
             result,
             execution_time,
             timestamp: OffsetDateTime::now_utc(),
+            client_ip,
+            sync_task_id,
         }
-    }
-    pub async fn insert_infinite_sql_log(
-        inserter: &mut Inserter<SqlLogDao>,
-        record: SqlLogDao,
-    ) -> Result<(), anyhow::Error> {
-        inserter.write(&record).await?;
-        Ok(())
     }
 }
