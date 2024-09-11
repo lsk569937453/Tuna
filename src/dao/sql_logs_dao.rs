@@ -26,31 +26,23 @@ pub struct SqlLogDao {
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerMinuteDao {
-    #[serde(
-        serialize_with = "serialize_human_readable_time",
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
-    )]
-    pub minute: OffsetDateTime,
+    pub minute: String,
     pub total_logs: u64,
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerMinuteGroupbySyncTaskIdDao {
-    #[serde(
-        serialize_with = "serialize_human_readable_time",
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
-    )]
-    pub minute: OffsetDateTime,
+    // #[serde(
+    //     serialize_with = "serialize_human_readable_time",
+    //     deserialize_with = "clickhouse::serde::time::datetime::deserialize"
+    // )]
+    pub minute: String,
     pub sync_task_id: u32,
 
     pub total_logs: u64,
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerDayDao {
-    #[serde(
-        serialize_with = "serialize_human_readable_time",
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
-    )]
-    pub day: OffsetDateTime,
+    pub day: String,
     pub total_logs: u64,
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
@@ -90,17 +82,15 @@ impl SqlLogDao {
     ) -> Result<Vec<LogsPerMinuteDao>, anyhow::Error> {
         let result = client
             .query(
-                "SELECT 
-    toStartOfMinute(timestamp) AS minute, 
-    count() AS total_logs
-FROM 
-    tuna.sql_logs
-WHERE 
-    timestamp >= toStartOfDay(now())
-GROUP BY 
+                "SELECT formatDateTime (
+        toStartOfMinute (timestamp), '%R'
+    ) AS minute, count() AS total_logs
+FROM tuna.sql_logs
+WHERE
+    timestamp >= toStartOfDay (now())
+GROUP BY
     minute
-ORDER BY 
-    minute",
+ORDER BY minute",
             )
             .fetch_all::<LogsPerMinuteDao>()
             .await?;
@@ -113,7 +103,9 @@ ORDER BY
         let result = client
             .query(
                 "SELECT 
-    toStartOfMinute(timestamp) AS minute, 
+    formatDateTime (
+        toStartOfMinute (timestamp), '%R'
+    ) AS minute, 
     sync_task_id,  
     count() AS total_logs
 FROM 
@@ -134,17 +126,15 @@ ORDER BY
     pub async fn get_logs_per_day(client: Client) -> Result<Vec<LogsPerDayDao>, anyhow::Error> {
         let result = client
             .query(
-                "SELECT 
-    toStartOfDay(timestamp) AS day, 
-    count() AS total_logs
-FROM 
-    tuna.sql_logs
-WHERE 
-    timestamp >= subtractDays(now(), 30)  
-GROUP BY 
+                "SELECT formatDateTime (
+        toStartOfDay (timestamp), '%F'
+    ) AS day, count() AS total_logs
+FROM tuna.sql_logs
+WHERE
+    timestamp >= subtractDays (now(), 30)
+GROUP BY
     day
-ORDER BY 
-    day",
+ORDER BY day",
             )
             .fetch_all::<LogsPerDayDao>()
             .await?;

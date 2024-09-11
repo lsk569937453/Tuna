@@ -63,7 +63,7 @@ function TaskPage() {
         }
     }
     const getTaskList = () => {
-        Request.get("/api/task").then((res) => {
+        Request.get("/api/syncTask").then((res) => {
             console.log(res);
             const mesArray = res.data.message.map(
                 ({
@@ -108,7 +108,7 @@ function TaskPage() {
         })
     }
     const addAsyncTask = () => {
-        Request.post("/api/task", {
+        Request.post("/api/syncTask", {
             "task_name": taskName,
             "from_datasource_id": Number(fromDatasourceName),
             "from_database_name": fromDatabaseName,
