@@ -1,4 +1,3 @@
-use crate::util::serialize_human_readable_time;
 use clickhouse::Client;
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
@@ -47,11 +46,11 @@ pub struct LogsPerDayDao {
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerDayGroupbySyncTaskIdDao {
-    #[serde(
-        serialize_with = "serialize_human_readable_time",
-        deserialize_with = "clickhouse::serde::time::datetime::deserialize"
-    )]
-    pub day: OffsetDateTime,
+    // #[serde(
+    //     serialize_with = "serialize_human_readable_time",
+    //     deserialize_with = "clickhouse::serde::time::datetime::deserialize"
+    // )]
+    pub day: String,
     pub sync_task_id: u32,
     pub total_logs: u64,
 }
@@ -146,8 +145,9 @@ ORDER BY day",
     ) -> Result<Vec<LogsPerDayGroupbySyncTaskIdDao>, anyhow::Error> {
         let result = client
             .query(
-                "SELECT 
-    toStartOfDay(timestamp) AS day, 
+                "SELECT formatDateTime (
+        toStartOfDay (timestamp), '%F'
+    ) AS day,
     sync_task_id,
     count() AS total_logs
 FROM 

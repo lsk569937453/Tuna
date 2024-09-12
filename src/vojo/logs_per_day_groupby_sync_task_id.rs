@@ -1,23 +1,28 @@
-use crate::util;
-use crate::util::serialize_human_readable_time;
-use chrono::Utc;
 use serde::Serialize;
-use sqlx::types::chrono::DateTime;
-use time::OffsetDateTime;
+
 #[derive(Serialize, Clone)]
-pub struct LogsPerDayGroupbySyncTaskId {
-    pub sync_task_name: String,
+pub struct LogsPerDayGroupbySyncTaskIdRes {
+    pub all_days: Vec<String>,
     pub list: Vec<LogsPerDayGroupbySyncTaskIdItem>,
+}
+
+impl LogsPerDayGroupbySyncTaskIdRes {
+    pub fn new(all_days: Vec<String>, list: Vec<LogsPerDayGroupbySyncTaskIdItem>) -> Self {
+        Self { all_days, list }
+    }
 }
 #[derive(Serialize, Clone)]
 
 pub struct LogsPerDayGroupbySyncTaskIdItem {
-    #[serde(serialize_with = "serialize_human_readable_time")]
-    pub day: OffsetDateTime,
-    pub total_logs: u64,
+    // #[serde(serialize_with = "serialize_human_readable_time")]
+    pub sync_task_name: String,
+    pub total_logs: Vec<u64>,
 }
 impl LogsPerDayGroupbySyncTaskIdItem {
-    pub fn new(day: OffsetDateTime, total_logs: u64) -> Self {
-        Self { day, total_logs }
+    pub fn new(sync_task_name: String, total_logs: Vec<u64>) -> Self {
+        Self {
+            sync_task_name,
+            total_logs,
+        }
     }
 }
