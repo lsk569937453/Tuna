@@ -1,17 +1,18 @@
+use crate::util::serialize_human_readable_time;
 use clickhouse::Client;
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
-
 #[derive(Serialize, Deserialize, Debug, Row)]
 pub struct SqlLogDao {
     pub id: u128,
+    pub sync_task_id: u32,
+
     pub query: String,
     pub result: String,
     pub execution_time: u64,
     pub client_ip: String,
-    pub sync_task_id: u32,
     #[serde(
         deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize",
         serialize_with = "clickhouse::serde::time::datetime64::millis::serialize"
@@ -23,6 +24,29 @@ pub struct SqlLogDao {
     )]
     pub timestamp: OffsetDateTime,
 }
+
+#[derive(Serialize, Deserialize, Debug, Row)]
+pub struct SqlLogResponse {
+    pub id: u128,
+    pub sync_task_id: u32,
+
+    pub query: String,
+    pub result: String,
+    pub execution_time: u64,
+    pub client_ip: String,
+
+    #[serde(
+        serialize_with = "serialize_human_readable_time",
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
+    )]
+    pub sql_timestamp: OffsetDateTime,
+
+    #[serde(
+        serialize_with = "serialize_human_readable_time",
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
+    )]
+    pub timestamp: OffsetDateTime,
+}
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerMinuteDao {
     pub minute: String,
@@ -30,10 +54,6 @@ pub struct LogsPerMinuteDao {
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerMinuteGroupbySyncTaskIdDao {
-    // #[serde(
-    //     serialize_with = "serialize_human_readable_time",
-    //     deserialize_with = "clickhouse::serde::time::datetime::deserialize"
-    // )]
     pub minute: String,
     pub sync_task_id: u32,
 
@@ -46,10 +66,6 @@ pub struct LogsPerDayDao {
 }
 #[derive(Debug, Serialize, Deserialize, Row)]
 pub struct LogsPerDayGroupbySyncTaskIdDao {
-    // #[serde(
-    //     serialize_with = "serialize_human_readable_time",
-    //     deserialize_with = "clickhouse::serde::time::datetime::deserialize"
-    // )]
     pub day: String,
     pub sync_task_id: u32,
     pub total_logs: u64,
@@ -75,7 +91,36 @@ impl SqlLogDao {
             sql_timestamp,
         }
     }
+    pub async fn query_logs(
+        client: Client,
+        sync_task_id: Option<u32>,
+        start_time: Option<String>,
+        end_time: Option<String>,
+    ) -> Result<Vec<SqlLogResponse>, anyhow::Error> {
+        // Start building the base SQL query
+        let mut query = String::from("SELECT * FROM sql_logs WHERE 1=1");
 
+        // Append conditions based on the provided options
+        if let Some(task_id) = sync_task_id {
+            query.push_str(&format!(" AND sync_task_id = {}", task_id));
+        }
+
+        if let Some(start) = start_time {
+            query.push_str(&format!(" AND sql_timestamp >= '{}'", start));
+        }
+
+        if let Some(end) = end_time {
+            query.push_str(&format!(" AND sql_timestamp <= '{}'", end));
+        }
+        query.push_str(" ORDER BY timestamp DESC");
+
+        // Execute the query
+        let result = client.query(&query).fetch_all::<SqlLogResponse>().await?;
+
+        info!("query_logs: {:?}", result);
+
+        Ok(result)
+    }
     pub async fn get_logs_per_minute(
         client: Client,
     ) -> Result<Vec<LogsPerMinuteDao>, anyhow::Error> {
