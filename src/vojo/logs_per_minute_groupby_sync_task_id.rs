@@ -1,9 +1,5 @@
-use crate::util;
-use crate::util::serialize_human_readable_time;
-use chrono::Utc;
 use serde::Serialize;
-use sqlx::types::chrono::DateTime;
-use time::OffsetDateTime;
+
 #[derive(Serialize, Clone)]
 pub struct LogsPerminuteGroupbySyncTaskIdRes {
     pub all_minutes: Vec<String>,

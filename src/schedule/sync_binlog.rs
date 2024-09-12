@@ -3,7 +3,7 @@ use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
 use crate::{binlog::binlog_poller::BinlogPoller, dao::sql_logs_dao::SqlLogDao};
-use clickhouse::{insert, Client};
+use clickhouse::Client;
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
 
 use std::time::Duration;
