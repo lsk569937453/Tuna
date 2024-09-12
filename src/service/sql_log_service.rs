@@ -7,10 +7,12 @@ use crate::vojo::logs_per_day_groupby_sync_task_id::LogsPerDayGroupbySyncTaskIdI
 use crate::vojo::logs_per_day_groupby_sync_task_id::LogsPerDayGroupbySyncTaskIdRes;
 use crate::vojo::logs_per_minute_groupby_sync_task_id::LogsPerminuteGroupbySyncTaskIdRes;
 use crate::vojo::logs_per_minute_groupby_sync_task_id::LogsPerminuteGroupbySyncTaskIdResItem;
+use crate::vojo::query_logs_req::QueryLogsReq;
 
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
+use axum::Json;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -125,6 +127,29 @@ async fn get_sql_logs_per_day_groupby_sync_task_id_with_error(
     let data = BaseResponse {
         response_code: 0,
         response_object: data,
+    };
+    serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
+}
+pub async fn query_logs(
+    State(state): State<AppState>,
+    Json(data): Json<QueryLogsReq>,
+) -> Result<Response, Infallible> {
+    handle_response!(query_logs_with_error(state, data).await)
+}
+async fn query_logs_with_error(
+    app_state: AppState,
+    query_logs_req: QueryLogsReq,
+) -> Result<String, anyhow::Error> {
+    let logs = SqlLogDao::query_logs(
+        app_state.clickhouse_client,
+        query_logs_req.sync_task_id,
+        query_logs_req.start_time,
+        query_logs_req.end_time,
+    )
+    .await?;
+    let data = BaseResponse {
+        response_code: 0,
+        response_object: logs,
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
