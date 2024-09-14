@@ -1,4 +1,4 @@
-use crate::config::tuna_config::{DatabaseConfig, MysqlConfig};
+use crate::config::tuna_config::MysqlConfig;
 use sqlx::Executor;
 use sqlx::{mysql::MySqlPool, mysql::MySqlPoolOptions};
 use std::env;

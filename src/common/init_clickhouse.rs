@@ -1,10 +1,14 @@
 use clickhouse::Client;
 
-pub async fn init_clickhouse() -> Result<Client, anyhow::Error> {
+use crate::config::tuna_config::ClickhouseConfig;
+
+pub async fn init_clickhouse(
+    clickhouse_config: &ClickhouseConfig,
+) -> Result<Client, anyhow::Error> {
     let client = Client::default()
-        .with_url("http://localhost:8123")
-        .with_user("clickhouse-user")
-        .with_password("secret")
-        .with_database("tuna");
+        .with_url(clickhouse_config.url.clone())
+        .with_user(clickhouse_config.user.clone())
+        .with_password(clickhouse_config.password.clone())
+        .with_database(clickhouse_config.database.clone());
     Ok(client)
 }
