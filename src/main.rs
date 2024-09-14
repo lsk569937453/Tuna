@@ -2,6 +2,7 @@ use binlog::binlog_realtime::test_binlog_with_realtime;
 use common::init_clickhouse::init_clickhouse;
 use common::init_redis;
 
+use config::tuna_config::AppConfig;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::audit_task_result_service::{
     get_audit_tasks_result, get_audit_tasks_result_by_audit_task_id,
@@ -29,6 +30,7 @@ use crate::common::init::init_with_error;
 mod schedule;
 mod service;
 use tracing_subscriber::Layer;
+mod config;
 mod util;
 mod vojo;
 use axum::routing::post;
@@ -203,7 +205,9 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
 }
 
 async fn app_with_error() -> Result<(), anyhow::Error> {
-    let db_pool = common::sql_connections::create_pool().await?;
+    let app_config = AppConfig::load_config()?;
+    info!("app_config:{:?}", app_config);
+    let db_pool = common::sql_connections::create_pool(&app_config.mysql).await?;
     init_with_error(db_pool.clone()).await?;
     let redis_client = init_redis().await?;
     let clickhouse_client = init_clickhouse().await?;
