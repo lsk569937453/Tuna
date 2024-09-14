@@ -202,13 +202,15 @@ fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::filter::LevelFilter::TRACE)
         .with(file_layer);
+    let show_console = app_config
+        .logging
+        .clone()
+        .unwrap_or_default()
+        .console
+        .unwrap_or(false);
 
-    if let Some(s) = &app_config.logging {
-        if s.console {
-            subscriber.with(console_layer).init();
-        } else {
-            subscriber.init();
-        }
+    if show_console.clone() {
+        subscriber.with(console_layer).init();
     } else {
         subscriber.init();
     }

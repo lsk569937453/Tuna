@@ -47,9 +47,9 @@ impl AppConfig {
 pub struct MysqlConfig {
     pub url: String,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct LoggingConfig {
-    pub console: bool,
+    pub console: Option<bool>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClickhouseConfig {
