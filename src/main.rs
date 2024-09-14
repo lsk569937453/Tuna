@@ -91,12 +91,14 @@ async fn main() {
     }
 }
 async fn main_with_error() -> Result<(), anyhow::Error> {
-    let _work_guard = setup_logger()?;
+    let app_config = AppConfig::load_config();
+    println!("app_config:{:?}", app_config);
+    let _work_guard = setup_logger(&app_config)?;
 
     let cli = Cli::parse();
 
     match cli.command.unwrap_or(Commands::Default) {
-        Commands::Default => app_with_error().await,
+        Commands::Default => app_with_error(app_config).await,
         Commands::I { count } => create_data(count).await,
         Commands::S => test_binlog_with_realtime().await,
     }
@@ -173,7 +175,7 @@ impl FormatTime for ShanghaiTime {
         write!(w, "{}", shanghai_now.format("%Y-%m-%d %H:%M:%S%.3f"))
     }
 }
-fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
+fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
     let app_file = RollingFileAppender::builder()
         .rotation(Rotation::DAILY) // rotate log files once every hour
         .filename_prefix("access")
@@ -196,21 +198,29 @@ fn setup_logger() -> Result<WorkerGuard, anyhow::Error> {
         .with_line_number(true)
         .with_ansi(true)
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .with(console_layer)
+
+    let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::filter::LevelFilter::TRACE)
-        .init();
+        .with(file_layer);
+
+    if let Some(s) = &app_config.logging {
+        if s.console {
+            subscriber.with(console_layer).init();
+        } else {
+            subscriber.init();
+        }
+    } else {
+        subscriber.init();
+    }
+
     Ok(guard)
 }
 
-async fn app_with_error() -> Result<(), anyhow::Error> {
-    let app_config = AppConfig::load_config()?;
-    info!("app_config:{:?}", app_config);
+async fn app_with_error(app_config: AppConfig) -> Result<(), anyhow::Error> {
     let db_pool = common::sql_connections::create_pool(&app_config.mysql).await?;
     init_with_error(db_pool.clone()).await?;
-    let redis_client = init_redis().await?;
-    let clickhouse_client = init_clickhouse().await?;
+    let redis_client = init_redis(&app_config.redis).await?;
+    let clickhouse_client = init_clickhouse(&app_config.clickhouse).await?;
 
     // Combine them into a single shared state
     let shared_state = AppState {

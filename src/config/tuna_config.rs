@@ -9,16 +9,27 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::from_reader;
 use std::env;
 use std::path::PathBuf;
+use std::process::exit;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub clickhouse: DatabaseConfig,
+    pub clickhouse: ClickhouseConfig,
     pub mysql: MysqlConfig,
     pub redis: RedisConfig,
+    pub logging: Option<LoggingConfig>,
 }
 // Function providing the default ClickHouse configuration
 
 impl AppConfig {
-    pub fn load_config() -> Result<Self, anyhow::Error> {
+    pub fn load_config() -> Self {
+        match Self::load_config_with_error() {
+            Ok(app_config) => app_config,
+            Err(err) => {
+                println!("Load error :{}", err);
+                exit(1);
+            }
+        }
+    }
+    pub fn load_config_with_error() -> Result<Self, anyhow::Error> {
         dotenv::dotenv().ok();
 
         let mut builder = ConfigBuilder::<DefaultState>::default();
@@ -36,9 +47,12 @@ impl AppConfig {
 pub struct MysqlConfig {
     pub url: String,
 }
-
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DatabaseConfig {
+pub struct LoggingConfig {
+    pub console: bool,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClickhouseConfig {
     pub url: String,
     pub user: String,
     pub password: String,
