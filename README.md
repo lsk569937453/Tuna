@@ -62,3 +62,20 @@ To show the binlog:
 ./myapp s
 
 ```
+
+```
+export APP_CLICKHOUSE__URL="http://localhost:8123"
+export APP_CLICKHOUSE__USER="clickhouse-user"
+export APP_CLICKHOUSE__PASSWORD="secret"
+export APP_CLICKHOUSE__DATABASE="tuna"
+
+export APP_MYSQL__URL="http://localhost:3306"
+export APP_MYSQL__USER="root"
+export APP_MYSQL__PASSWORD="secret"
+export APP_MYSQL__DATABASE="tuna"
+
+export APP_REDIS_URL__URL="http://localhost:6379"
+export APP_REDIS_URL__PASSWORD="secret"
+
+`APP_REDIS_URL__URL="http://localhost:3333 ./target/app` would set the `APP_REDIS_URL__URL` key
+```

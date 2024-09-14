@@ -1,1 +1,13 @@
-clickhouse: aa
+clickhouse:
+  url: http://localhost:8123
+  user: clickhouse-user
+  password: secret
+  database: tuna
+mysql:
+  url: mysql://root:root@localhost:9306/mydb
+redis:
+  urls:
+    - http://localhost:6379
+    - http://localhost:6380
+    - http://localhost:6381
+  password: secret
