@@ -5,4 +5,5 @@
 5.监控
 6.github actions
 7.所有的日志入clickhouse,
-8.查询sql_logs的日志
+8.配置文件
+9.中断告警
