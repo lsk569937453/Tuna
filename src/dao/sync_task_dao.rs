@@ -30,8 +30,7 @@ impl SyncTaskDao {
         to_datasource_url: String,
     ) -> Result<(), anyhow::Error> {
         let table_mapping = serde_json::to_string(&task.table_mapping)?;
-        sqlx::query_as!(
-            TaskDao,
+        sqlx::query(
             r#"
             INSERT INTO sync_task (
                 task_name,
@@ -44,15 +43,15 @@ impl SyncTaskDao {
                 to_datasource_url
             ) VALUES (?, ?, ?, ?, ?, ?,?,?)
             "#,
-            task.task_name,
-            task.from_datasource_id,
-            task.to_datasource_id,
-            task.from_database_name,
-            task.to_database_name,
-            table_mapping,
-            from_datasource_url,
-            to_datasource_url
         )
+        .bind(task.task_name.clone())
+        .bind(task.from_datasource_id)
+        .bind(task.to_datasource_id)
+        .bind(task.from_database_name.clone())
+        .bind(task.to_database_name.clone())
+        .bind(table_mapping)
+        .bind(from_datasource_url)
+        .bind(to_datasource_url)
         .execute(pool)
         .await?;
 
@@ -63,8 +62,7 @@ impl SyncTaskDao {
         pool: &MySqlPool,
         task_id: i32,
     ) -> Result<Option<SyncTaskDao>, anyhow::Error> {
-        let task = sqlx::query_as!(
-            SyncTaskDao,
+        let task = sqlx::query_as(
             r#"
             SELECT
                 id,
@@ -80,22 +78,22 @@ impl SyncTaskDao {
             FROM sync_task
             WHERE id = ?
             "#,
-            task_id
         )
+        .bind(task_id)
         .fetch_optional(pool)
         .await?;
 
         Ok(task)
     }
     pub async fn fetch_all_tasks(pool: &MySqlPool) -> Result<Vec<SyncTaskDao>, Error> {
-        let tasks = sqlx::query_as!(SyncTaskDao, "SELECT * FROM sync_task")
+        let tasks = sqlx::query_as("SELECT * FROM sync_task")
             .fetch_all(pool)
             .await?;
 
         Ok(tasks)
     }
     pub async fn update_task(pool: &MySqlPool, task: &SyncTaskDao) -> Result<(), anyhow::Error> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE sync_task SET
                 task_name = ?,
@@ -107,15 +105,15 @@ impl SyncTaskDao {
                 timestamp = ?
             WHERE id = ?
             "#,
-            task.task_name,
-            task.from_datasource_id,
-            task.to_datasource_id,
-            task.from_database_name,
-            task.to_database_name,
-            task.table_mapping,
-            task.timestamp,
-            task.id
         )
+        .bind(task.task_name.clone())
+        .bind(task.from_datasource_id)
+        .bind(task.to_datasource_id)
+        .bind(task.from_database_name.clone())
+        .bind(task.to_database_name.clone())
+        .bind(task.table_mapping.clone())
+        .bind(task.timestamp)
+        .bind(task.id)
         .execute(pool)
         .await?;
 
@@ -123,12 +121,12 @@ impl SyncTaskDao {
     }
 
     pub async fn delete_task(pool: &MySqlPool, task_id: i32) -> Result<(), anyhow::Error> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             DELETE FROM sync_task WHERE id = ?
             "#,
-            task_id
         )
+        .bind(task_id)
         .execute(pool)
         .await?;
 

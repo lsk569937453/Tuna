@@ -19,17 +19,16 @@ pub struct DataSourceDao {
 
 impl DataSourceDao {
     pub async fn find_by_id(pool: &MySqlPool, id: i32) -> Result<Self, Error> {
-        sqlx::query_as!(
-            DataSourceDao,
+        sqlx::query_as(
             "SELECT id, datasource_name, datasource_url, host, port, timestamp FROM datasource WHERE id = ?",
-            id
-        )
+            
+        ).bind(id)
         .fetch_one(pool)
         .await
     }
 
     pub async fn fetch_all_datasources(pool: &MySqlPool) -> Result<Vec<DataSourceDao>, Error> {
-        let datasources = sqlx::query_as!(DataSourceDao, "SELECT * FROM datasource")
+        let datasources = sqlx::query_as( "SELECT * FROM datasource")
             .fetch_all(pool)
             .await?;
 
@@ -42,21 +41,16 @@ impl DataSourceDao {
         host: String,
         port: i32,
     ) -> Result<(), Error> {
-        sqlx::query_as!(
-            DataSourceDao,
+        sqlx::query(
             "INSERT INTO datasource (datasource_name, datasource_url, host, port) VALUES (?,?,?,?)",
-            datasource_name,
-            datasource_url,
-            host,
-            port
-        )
+        ).bind(datasource_name).bind(datasource_url).bind(host).bind(port)
         .execute(pool)
         .await?;
         Ok(())
     }
 
     pub async fn delete(pool: &MySqlPool, id: i32) -> Result<(), Error> {
-        sqlx::query!("DELETE FROM datasource WHERE id = ?", id)
+        sqlx::query("DELETE FROM datasource WHERE id = ?").bind(id)
             .execute(pool)
             .await?;
         Ok(())
