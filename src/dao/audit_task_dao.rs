@@ -15,13 +15,13 @@ pub struct AuditTaskDao {
 
 impl AuditTaskDao {
     pub async fn create_auit_task(pool: &MySqlPool, task_id: i32) -> Result<i32, Error> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             INSERT INTO audit_task (task_id)
             VALUES (?)
             "#,
-            task_id
         )
+        .bind(task_id)
         .execute(pool)
         .await?;
 
@@ -32,20 +32,19 @@ impl AuditTaskDao {
         pool: &MySqlPool,
         id: i32,
     ) -> Result<Option<AuditTaskDao>, Error> {
-        let result = sqlx::query_as!(
-            AuditTaskDao,
+        let result = sqlx::query_as(
             r#"
             SELECT * FROM audit_task WHERE id = ?
             "#,
-            id
         )
+        .bind(id)
         .fetch_optional(pool)
         .await?;
 
         Ok(result)
     }
     pub async fn fetch_all_audit_tasks(pool: &MySqlPool) -> Result<Vec<AuditTaskDao>, Error> {
-        let datasources = sqlx::query_as!(AuditTaskDao, "SELECT * FROM audit_task")
+        let datasources = sqlx::query_as("SELECT * FROM audit_task")
             .fetch_all(pool)
             .await?;
 
@@ -55,13 +54,12 @@ impl AuditTaskDao {
         pool: &MySqlPool,
         task_id: i32,
     ) -> Result<Option<AuditTaskDao>, Error> {
-        let result = sqlx::query_as!(
-            AuditTaskDao,
+        let result = sqlx::query_as(
             r#"
             SELECT * FROM audit_task WHERE task_id = ?
             "#,
-            task_id
         )
+        .bind(task_id)
         .fetch_optional(pool)
         .await?;
 
@@ -73,13 +71,13 @@ impl AuditTaskDao {
         id: i32,
         status: i32,
     ) -> Result<(), Error> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE audit_task SET status = ? WHERE id = ?
             "#,
-            status,
-            id
         )
+        .bind(status)
+        .bind(id)
         .execute(pool)
         .await?;
 
@@ -87,12 +85,12 @@ impl AuditTaskDao {
     }
 
     pub async fn delete_audit_task(pool: &MySqlPool, id: i32) -> Result<u64, Error> {
-        let res = sqlx::query!(
+        let res = sqlx::query(
             r#"
             DELETE FROM audit_task WHERE id = ?
             "#,
-            id
         )
+        .bind(id)
         .execute(pool)
         .await?;
 
