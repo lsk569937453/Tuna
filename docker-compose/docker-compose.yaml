@@ -63,8 +63,8 @@ services:
       done
 
       clickhouse-client --host clickhouse --user clickhouse-user --password secret --database tuna  --queries-file /var/init_clickhouse/init.sql
+      clickhouse-client --host clickhouse --user clickhouse-user --password secret --database tuna  --queries-file /var/init_clickhouse/init3.sql
       clickhouse-client --host clickhouse --user clickhouse-user --password secret --database tuna  --queries-file /var/init_clickhouse/init2.sql
-
 
       tail -f /dev/null
       "

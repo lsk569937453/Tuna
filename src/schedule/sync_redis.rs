@@ -4,7 +4,6 @@ use crate::common::common_constants::TASK_LOCK_KEY_TEMPLATE;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
 use crate::schedule::binlog_polling_task::BinlogPollingTask;
-use crate::schedule::sync_binlog::sync_binlog_with_error;
 use crate::util::redis_util::lock;
 use crate::util::redis_util::unlock;
 use local_ip_address::local_ip;
