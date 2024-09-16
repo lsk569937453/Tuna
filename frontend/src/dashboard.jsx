@@ -15,11 +15,13 @@ function Dashboard() {
 
     const [datePerDay, setDatePerDay] = useState([]);
     const [dataPerMinuteGroupByTaskId, setDataPerMinuteGroupByTaskId] = useState([]);
+    const [dataPerdayGroupByTaskId, setDataPerdayGroupByTaskId] = useState([]);
 
     useEffect(() => {
         getDataPerMinute();
         getDataPerDay();
         getDataPerMinuteGroupByTaskId();
+        getDataPerDayGroupByTaskId();
     }, []);
 
     const getDataPerMinute = () => {
@@ -63,12 +65,19 @@ function Dashboard() {
             setDataPerMinuteGroupByTaskId(res.data.message);
         });
     };
+    const getDataPerDayGroupByTaskId = () => {
+        Request.get("/api/sqlLogs/perDayTaskId").then((res) => {
+            console.log(res);
+
+            setDataPerdayGroupByTaskId(res.data.message);
+        });
+    };
     const optionsForDataPerMinute = () => {
 
 
         return {
             title: {
-                // left: 'center',
+                left: 'center',
                 text: '今日同步总览'
             },
             xAxis: {
@@ -76,7 +85,7 @@ function Dashboard() {
                 data: dataPerMinute.map(item => item.minute)
             },
             yAxis: {
-                name: '同步次数',
+                name: '同步sql条数',
 
                 type: 'value',
 
@@ -98,7 +107,7 @@ function Dashboard() {
                     data: []  // Empty x-axis data
                 },
                 yAxis: {
-                    name: '同步次数',
+                    name: '同步sql条数',
                     type: 'value',
                 },
                 series: []  // No series data
@@ -108,6 +117,7 @@ function Dashboard() {
 
         return {
             title: {
+
                 text: '同步任务今日同步总览'
 
             },
@@ -139,6 +149,8 @@ function Dashboard() {
             ],
             yAxis: [
                 {
+                    name: '同步sql条数',
+
                     type: 'value'
                 }
             ],
@@ -167,7 +179,7 @@ function Dashboard() {
                 data: datePerDay.map(item => item.day)
             },
             yAxis: {
-                name: '同步次数',
+                name: '同步sql条数',
 
                 type: 'value',
 
@@ -181,35 +193,104 @@ function Dashboard() {
         };
     }
 
+    const optionsForDataPerDayGroupByTaskId = () => {
+        if (!dataPerdayGroupByTaskId || !dataPerdayGroupByTaskId.all_days || !dataPerdayGroupByTaskId.list || dataPerdayGroupByTaskId.list.length === 0) {
+            return {
 
+                xAxis: {
+                    type: 'category',
+                    data: []  // Empty x-axis data
+                },
+                yAxis: {
+                    name: '同步sql条数',
+                    type: 'value',
+                },
+                series: []  // No series data
+            };
+        }
+
+
+        return {
+            title: {
+                text: '同步任务今日同步总览'
+
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross',
+                    label: {
+                        backgroundColor: '#6a7985'
+                    }
+                }
+            },
+            legend: {
+                data: dataPerdayGroupByTaskId.list.map(task => task.sync_task_name),
+            },
+
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: [
+                {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: dataPerdayGroupByTaskId.all_days
+                }
+            ],
+            yAxis: [
+                {
+                    name: '同步sql条数',
+
+                    type: 'value'
+                }
+            ],
+            series: dataPerdayGroupByTaskId?.list.map(task => ({
+                name: task.sync_task_name,  // Sync task name for each series
+                data: task.total_logs,      // Corresponding logs data
+                type: 'line',                // Type of chart (bar in this case)
+                emphasis: {
+                    focus: 'series'
+                },
+                stack: 'Total',
+
+            }))
+        };
+    }
     return (
         <div className="flex flex-col">
-            <Card className="m-10 basis-12 	">
+            <Card className="m-10 basis-12 	bg-slate-100	">
                 <div className="flex flex-col overflow-auto	">
                     <h5 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white basis-12 text-center">
                         Tuna数据同步平台
-                        <div className="flex flex-row">
-                            <div className="basis-1/2">
-                                <ReactECharts option={optionsForDataPerMinute()} />
-
-                            </div>
-                            <div className="basis-1/2">
-                                <ReactECharts option={optionsForDataPerDay()} />
-
-                            </div>
-                        </div>
-                        <div className="flex flex-row">
-                            <div className="basis-1/2">
-                                <ReactECharts option={optionsForDataPerMinuteGroupByTaskId()} />
-
-                            </div>
-                            <div className="basis-1/2">
-                                <ReactECharts option={optionsForDataPerDay()} />
-
-                            </div>
-                        </div>
                     </h5>
+                    <div className="flex flex-row gap-4">
+                        <div className="basis-1/3 bg-white	rounded-lg	p-4">
+                            <ReactECharts option={optionsForDataPerMinute()} />
 
+                        </div>
+                        <div className="basis-1/3 bg-white	rounded-lg p-4 ">
+                            <ReactECharts option={optionsForDataPerDay()} />
+
+                        </div>
+                        <div className="basis-1/3 bg-white	rounded-lg p-4 ">
+                            <ReactECharts option={optionsForDataPerDay()} />
+
+                        </div>
+                    </div>
+                    <div className="flex flex-row  gap-4 pt-4">
+                        <div className="basis-1/2 bg-white	rounded-lg p-4">
+                            <ReactECharts option={optionsForDataPerMinuteGroupByTaskId()} />
+
+                        </div>
+                        <div className="basis-1/2 bg-white	rounded-lg p-4">
+                            <ReactECharts option={optionsForDataPerDayGroupByTaskId()} />
+
+                        </div>
+                    </div>
                 </div>
             </Card >
 

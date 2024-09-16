@@ -3,6 +3,7 @@ use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
 use crate::common::common_constants::TASK_LOCK_KEY_TEMPLATE;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::record_error;
+use crate::schedule::binlog_polling_task::BinlogPollingTask;
 use crate::schedule::sync_binlog::sync_binlog_with_error;
 use crate::util::redis_util::lock;
 use crate::util::redis_util::unlock;
@@ -40,7 +41,6 @@ async fn sync_task_ids(
     for task in tasks {
         let cloned_pool = app_state.clone();
         let mut cloned_cluster_connection = cluster_connection.clone();
-        let cloned_task = task.clone();
         let task_id = task.id;
         let task_info_key = format!("{}{}", TASK_INFO_KEY_TEMPLATE, task_id);
         let task_info_option: Option<String> = cluster_connection
@@ -65,41 +65,15 @@ async fn sync_task_ids(
                     "get the task_lock success,task_id:{},task_lock is {}",
                     task_id, task_lock
                 );
+                let binlog_polling_task = BinlogPollingTask::new(
+                    app_state.clone(),
+                    task_info_key,
+                    task_lock,
+                    lock_val,
+                    task,
+                );
 
-                tokio::spawn(async move {
-                    //获取到分布式锁的线程，先抢到锁，然后设置上task_info_key，再把锁释放掉
-                    //然后进入事件循环
-                    let client_ip = local_ip()
-                        .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                        .to_string();
-
-                    let set_options = SetOptions::default()
-                        .conditional_set(ExistenceCheck::NX)
-                        .with_expiration(redis::SetExpiry::PX(10000));
-                    let operation_result: Result<Option<Value>, redis::RedisError> =
-                        cloned_cluster_connection
-                            .set_options(task_info_key, client_ip, set_options)
-                            .await;
-                    match operation_result {
-                        Ok(Some(Value::Okay)) => {
-                            unlock(&mut cloned_cluster_connection, task_lock, lock_val).await;
-                            record_error!(
-                                sync_binlog_with_error(
-                                    &mut cloned_cluster_connection,
-                                    cloned_pool,
-                                    cloned_task,
-                                )
-                                .await
-                            );
-                        }
-                        Err(e) => {
-                            error!("set_options error: {:?}", e);
-                        }
-                        _ => {
-                            info!("Lock fail");
-                        }
-                    }
-                });
+                tokio::spawn(async move { binlog_polling_task.run().await });
             } else {
                 info!(
                     "get the task_lock failed,task_id:{},task_lock is {}",
