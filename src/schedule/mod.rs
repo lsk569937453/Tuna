@@ -8,3 +8,4 @@ macro_rules! record_error {
         }
     };
 }
+pub mod binlog_polling_task;
