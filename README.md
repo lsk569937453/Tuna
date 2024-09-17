@@ -79,3 +79,32 @@ export APP_REDIS_URL__PASSWORD="secret"
 
 `APP_REDIS_URL__URL="http://localhost:3333 ./target/app` would set the `APP_REDIS_URL__URL` key
 ```
+
+```
+SELECT *
+FROM sync_task_running_logs
+WHERE
+    sync_task_id IN (1, 2, 3)
+    AND timestamp = (
+        SELECT MAX(timestamp)
+        FROM
+            sync_task_running_logs AS subquery
+        WHERE
+            subquery.sync_task_id = sync_task_running_logs.sync_task_id
+    )
+ORDER BY timestamp DESC;
+```
+```
+SELECT *
+FROM sync_task_running_logs
+WHERE
+    sync_task_uuid IN (a539834f-7abe-180a-df54-c475f0034b86,23456,34567)
+    AND timestamp = (
+        SELECT MIN(timestamp)
+        FROM
+            sync_task_running_logs AS subquery
+        WHERE
+            subquery.sync_task_uuid = sync_task_running_logs.sync_task_uuid
+    )
+ORDER BY timestamp ASC;
+```
