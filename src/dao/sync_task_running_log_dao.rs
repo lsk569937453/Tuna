@@ -1,16 +1,17 @@
 use chrono::{DateTime, Utc};
 use clickhouse::{Client, Row};
+use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Row)]
-struct SyncTaskRunningLogsDao {
-    id: u128,
-    sync_task_uuid: u128,
-    level: String,
-    message: String,
-    sync_task_id: u32,
+pub struct SyncTaskRunningLogsDao {
+    pub id: u128,
+    pub sync_task_uuid: u128,
+    pub level: Loglevel,
+    pub message: String,
+    pub sync_task_id: u32,
 
     #[serde(
         skip_serializing,
@@ -18,8 +19,26 @@ struct SyncTaskRunningLogsDao {
     )]
     pub timestamp: OffsetDateTime,
 }
+#[derive(Debug, Deserialize)]
+pub enum Loglevel {
+    Info,
+    Error,
+}
+
+impl Serialize for Loglevel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let level_str = match *self {
+            Loglevel::Info => "INFO",
+            Loglevel::Error => "ERROR",
+        };
+        serializer.serialize_str(level_str)
+    }
+}
 impl SyncTaskRunningLogsDao {
-    pub fn new(sync_task_uuid: u128, level: String, message: String, sync_task_id: u32) -> Self {
+    pub fn new(sync_task_uuid: u128, level: Loglevel, message: String, sync_task_id: u32) -> Self {
         Self {
             id: Uuid::new_v4().as_u128(),
             sync_task_uuid,

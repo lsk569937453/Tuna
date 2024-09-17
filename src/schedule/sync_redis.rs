@@ -2,18 +2,10 @@ use crate::common::app_state::AppState;
 use crate::common::common_constants::TASK_INFO_KEY_TEMPLATE;
 use crate::common::common_constants::TASK_LOCK_KEY_TEMPLATE;
 use crate::dao::sync_task_dao::SyncTaskDao;
-use crate::record_error;
 use crate::schedule::binlog_polling_task::BinlogPollingTask;
-use crate::schedule::sync_binlog::sync_binlog_with_error;
 use crate::util::redis_util::lock;
-use crate::util::redis_util::unlock;
-use local_ip_address::local_ip;
-use redis::ExistenceCheck;
-use redis::SetOptions;
-use redis::Value;
+
 use redis::{cluster_async::ClusterConnection, AsyncCommands};
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
 
 use std::time::Duration;
 use tokio::time::interval;
@@ -39,8 +31,6 @@ async fn sync_task_ids(
 ) -> Result<(), anyhow::Error> {
     let tasks = SyncTaskDao::fetch_all_tasks(&app_state.db_pool).await?;
     for task in tasks {
-        let cloned_pool = app_state.clone();
-        let mut cloned_cluster_connection = cluster_connection.clone();
         let task_id = task.id;
         let task_info_key = format!("{}{}", TASK_INFO_KEY_TEMPLATE, task_id);
         let task_info_option: Option<String> = cluster_connection
