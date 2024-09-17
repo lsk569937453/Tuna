@@ -1,14 +1,9 @@
 use builder::DefaultState;
-use config::Config;
 use config::ConfigBuilder;
-use config::Environment;
 use config::FileFormat;
 use config::*;
-use dotenv::dotenv;
+
 use serde::{Deserialize, Serialize};
-use serde_yaml::from_reader;
-use std::env;
-use std::path::PathBuf;
 use std::process::exit;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -17,7 +12,6 @@ pub struct AppConfig {
     pub redis: RedisConfig,
     pub logging: Option<LoggingConfig>,
 }
-// Function providing the default ClickHouse configuration
 
 impl AppConfig {
     pub fn load_config() -> Self {
