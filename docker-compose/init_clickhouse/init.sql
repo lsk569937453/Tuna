@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS audit_task_result (
     left_compare String DEFAULT '',
     right_compare String DEFAULT '',
     is_same UInt32 DEFAULT 0,
-    timestamp DateTime(3) DEFAULT now()
+    timestamp DateTime(3) DEFAULT now64 ()
 ) ENGINE = ReplacingMergeTree ()
 ORDER BY (execution_id, primary_id);

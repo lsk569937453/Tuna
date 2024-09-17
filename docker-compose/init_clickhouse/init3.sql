@@ -4,6 +4,6 @@ CREATE TABLE sync_task_running_logs (
     level String,
     message String,
     sync_task_id UInt32,
-    timestamp DateTime(3) DEFAULT now()
+    timestamp DateTime(3) DEFAULT now64 ()
 ) ENGINE = MergeTree ()
 ORDER BY timestamp
