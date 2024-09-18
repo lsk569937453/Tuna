@@ -81,24 +81,21 @@ export APP_REDIS_URL__PASSWORD="secret"
 ```
 
 ```
-SELECT *
+SELECT sync_task_id, sync_task_uuid
 FROM sync_task_running_logs
-WHERE
-    sync_task_id IN (1, 2, 3)
-    AND timestamp = (
-        SELECT MAX(timestamp)
-        FROM
-            sync_task_running_logs AS subquery
-        WHERE
-            subquery.sync_task_id = sync_task_running_logs.sync_task_id
-    )
-ORDER BY timestamp DESC;
+WHERE sync_task_id IN (1, 2)
+  AND timestamp = (
+    SELECT MAX(timestamp)
+    FROM sync_task_running_logs AS sub
+    WHERE sub.sync_task_id = sync_task_running_logs.sync_task_id
+)
+
 ```
 ```
 SELECT *
 FROM sync_task_running_logs
 WHERE
-    sync_task_uuid IN (a539834f-7abe-180a-df54-c475f0034b86,23456,34567)
+    sync_task_uuid IN (8df66dfe-6aed-d4e4-8c68-a28ab5114f7e)
     AND timestamp = (
         SELECT MIN(timestamp)
         FROM

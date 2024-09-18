@@ -110,37 +110,3 @@ async fn get_sync_task_status_by_id_with_error(
     };
     serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
 }
-pub async fn get_all_sync_task_status(
-    State(state): State<AppState>,
-) -> Result<Response, Infallible> {
-    handle_response!(get_all_sync_task_status_with_error(state).await)
-}
-async fn get_all_sync_task_status_with_error(app_state: AppState) -> Result<String, anyhow::Error> {
-    // let sync_tasks = SyncTaskDao::fetch_all_tasks(&app_state.db_pool).await?;
-
-    // let mut async_connection = app_state.redis_client.get_async_connection().await?;
-    // let redis_key = format!("{}{}", TASK_INFO_KEY_TEMPLATE, id);
-    // let redis_res: Option<String> = async_connection
-    //     .get(redis_key)
-    //     .await
-    //     .map_err(|e| anyhow!("get_sync_task_status_by_id_with_error error:{:?}", e))?;
-    // let status = match redis_res {
-    //     Some(r) => SyncTaskStatus::Running { status: 1, ip: r },
-    //     None => SyncTaskStatus::Stop { status: 1 },
-    // };
-    // let gtid_redis_key = format!("{}{}", TASK_GID_KEY_TEMPLATE, id);
-
-    // let h_res: HashMap<String, String> = async_connection.hgetall(gtid_redis_key).await?;
-    // let gtid_set = h_res
-    //     .iter()
-    //     .map(|(key, value)| format!("{}:{}", key, value))
-    //     .collect::<Vec<String>>()
-    //     .join(",");
-    // let sync_task_status_res = SyncTaskStatusRes { status, gtid_set };
-
-    let data = BaseResponse {
-        response_code: 0,
-        response_object: "sync_task_status_res",
-    };
-    serde_json::to_string(&data).map_err(|e| anyhow!("{}", e))
-}

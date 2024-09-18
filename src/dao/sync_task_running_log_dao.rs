@@ -1,3 +1,4 @@
+use crate::util::serialize_human_readable_time;
 use chrono::{DateTime, Utc};
 use clickhouse::{Client, Row};
 use serde::Serializer;
@@ -25,6 +26,23 @@ pub enum Loglevel {
     Error,
 }
 
+#[derive(Debug, Serialize, Deserialize, Row)]
+
+pub struct SyncTaskSummaryByTaskIdDao {
+    pub sync_task_id: u32,
+    pub sync_task_uuid: u128,
+
+    #[serde(
+        serialize_with = "serialize_human_readable_time",
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
+    )]
+    pub latest_timestamp: OffsetDateTime,
+    #[serde(
+        serialize_with = "serialize_human_readable_time",
+        deserialize_with = "clickhouse::serde::time::datetime64::millis::deserialize"
+    )]
+    pub oldest_timestamp: OffsetDateTime,
+}
 impl Serialize for Loglevel {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -56,5 +74,33 @@ impl SyncTaskRunningLogsDao {
         insert.write(&record).await?;
         insert.end().await?;
         Ok(())
+    }
+    pub async fn get_sync_task_summary_by_task_id(
+        client: Client,
+    ) -> Result<Vec<SyncTaskSummaryByTaskIdDao>, anyhow::Error> {
+        let result = client
+            .query(
+                "SELECT
+    sync_task_id,
+    sync_task_uuid,
+    latest_timestamp,
+    oldest_timestamp
+FROM (
+    SELECT
+        sync_task_id,
+        sync_task_uuid,
+        MAX(timestamp) AS latest_timestamp,
+        MIN(timestamp) AS oldest_timestamp,
+        ROW_NUMBER() OVER (PARTITION BY sync_task_id ORDER BY MAX(timestamp) DESC) AS rn
+    FROM sync_task_running_logs
+    GROUP BY sync_task_id, sync_task_uuid
+)
+WHERE rn = 1
+ORDER BY oldest_timestamp DESC
+",
+            )
+            .fetch_all::<SyncTaskSummaryByTaskIdDao>()
+            .await?;
+        Ok(result)
     }
 }
