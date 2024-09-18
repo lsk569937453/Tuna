@@ -210,7 +210,7 @@ fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
         .console
         .unwrap_or(false);
 
-    if show_console.clone() {
+    if show_console {
         subscriber.with(console_layer).init();
     } else {
         subscriber.init();

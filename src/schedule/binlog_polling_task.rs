@@ -19,7 +19,6 @@ use std::net::Ipv4Addr;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::time::interval;
-use uuid::Uuid;
 #[derive(Clone)]
 pub struct BinlogPollingTask {
     pub sync_task_id: u32,

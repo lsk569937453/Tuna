@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::common::common_constants::TASK_GID_KEY_TEMPLATE;
 use crate::dao::sql_logs_dao::SqlLogDao;
 use crate::vojo::create_audit_task_req::TableMappingItem;
-use crate::vojo::mysql_execution_result;
 use crate::vojo::mysql_execution_result::MysqlExecutionResult;
 use anyhow::anyhow;
 

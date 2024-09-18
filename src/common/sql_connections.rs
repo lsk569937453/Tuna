@@ -1,7 +1,6 @@
 use crate::config::tuna_config::MysqlConfig;
 use sqlx::Executor;
 use sqlx::{mysql::MySqlPool, mysql::MySqlPoolOptions};
-use std::env;
 use std::time::Duration;
 pub async fn create_pool(mysql_config: &MysqlConfig) -> Result<MySqlPool, anyhow::Error> {
     let database_url = mysql_config.url.clone();
