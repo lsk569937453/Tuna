@@ -1,5 +1,4 @@
 use crate::util::serialize_human_readable_time;
-use chrono::{DateTime, Utc};
 use clickhouse::{Client, Row};
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
