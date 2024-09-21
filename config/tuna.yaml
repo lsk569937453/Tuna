@@ -12,4 +12,4 @@ redis:
     - redis://127.0.0.1:7002/
   password: secret
 logging:
-  console: true
+  console: false

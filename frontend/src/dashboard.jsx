@@ -17,7 +17,13 @@ function Dashboard() {
     const [dataPerMinuteGroupByTaskId, setDataPerMinuteGroupByTaskId] = useState([]);
     const [dataPerdayGroupByTaskId, setDataPerdayGroupByTaskId] = useState([]);
     const [taskTableData, setTaskTableData] = useState([]);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            window.location.reload();
+        }, 5000); // 5000 milliseconds = 5 seconds
 
+        return () => clearInterval(interval); // Cleanup on unmount
+    }, []);
     useEffect(() => {
         getDataPerMinute();
         getDataPerDay();
@@ -190,7 +196,7 @@ function Dashboard() {
                 emphasis: {
                     focus: 'series'
                 },
-                stack: 'Total',
+                // stack: 'Total',
 
             }))
         };
@@ -284,7 +290,7 @@ function Dashboard() {
                 emphasis: {
                     focus: 'series'
                 },
-                stack: 'Total',
+                // stack: 'Total',
 
             }))
         };
