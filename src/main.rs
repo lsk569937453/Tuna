@@ -20,7 +20,7 @@ use service::sql_log_service::{
     get_sql_logs_per_day, get_sql_logs_per_day_groupby_sync_task_id, get_sql_logs_per_minute,
     get_sql_logs_per_minute_groupby_sync_task_id, query_logs,
 };
-use service::sync_task_running_log_service::get_sync_task_running_logs_summary_by_sync_task_id;
+use service::sync_task_running_log_service::get_sync_task_running_logs_summary_group_by_sync_task_id;
 use service::sync_task_servivce::{
     create_task, delete_sync_task_by_id, get_sync_task_status_by_id, get_task_list,
 };
@@ -270,7 +270,7 @@ async fn app_with_error(app_config: AppConfig) -> Result<(), anyhow::Error> {
         .route("/sqlLogs", post(query_logs))
         .route(
             "/syncTaskLogs/summaryByTaskId",
-            get(get_sync_task_running_logs_summary_by_sync_task_id),
+            get(get_sync_task_running_logs_summary_group_by_sync_task_id),
         )
         .with_state(cloned_shared_state);
     let final_route = Router::new().nest("/api", app);
