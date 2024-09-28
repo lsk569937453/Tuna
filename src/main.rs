@@ -1,7 +1,19 @@
+use axum::extract::Request;
 use binlog::binlog_realtime::test_binlog_with_realtime;
+use common::access_log_layer::AccelogOnResponse;
 use common::init_clickhouse::init_clickhouse;
 use common::init_redis;
+use std::time::Duration;
+use tower_http::classify::ServerErrorsFailureClass;
+use tower_http::trace::DefaultMakeSpan;
+use tower_http::trace::DefaultOnResponse;
+use tower_http::trace::OnResponse;
+use tower_http::LatencyUnit;
+use tower_http::ServiceBuilderExt;
+use tracing::Level;
 
+use axum::body::Bytes;
+use axum::response::Response;
 use config::tuna_config::AppConfig;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::audit_task_result_service::{
@@ -14,6 +26,8 @@ use service::datasource_service::{
     create_datasource, delete_datasource_by_id, get_datasource_list,
     get_primary_key_by_datasource_id,
 };
+use tower_http::request_id::MakeRequestUuid;
+use tracing::Span;
 mod common;
 mod dao;
 use service::sql_log_service::{
@@ -39,12 +53,15 @@ use axum::routing::{delete, get};
 use axum::Router;
 
 use crate::common::app_state::AppState;
+use crate::common::make_span::RequestIdSpan;
 use crate::init_redis::init_redis;
 use chrono::FixedOffset;
 use chrono::Utc;
 use clap::Parser;
 use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlPoolOptions;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
@@ -53,6 +70,7 @@ use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 #[macro_use]
 extern crate tracing;
 #[macro_use]
@@ -179,20 +197,36 @@ impl FormatTime for ShanghaiTime {
 fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
     let app_file = RollingFileAppender::builder()
         .rotation(Rotation::DAILY) // rotate log files once every hour
-        .filename_prefix("access")
+        .filename_prefix("application")
         .filename_suffix("log")
         .max_log_files(2)
         .build("./logs")?;
+    let access_log_file = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY) // rotate log files once every hour
+        .filename_prefix("access")
+        .filename_suffix("log")
+        .max_log_files(100)
+        .build("./logs")?;
+    let access_log_layer = tracing_subscriber::fmt::Layer::new()
+        .with_writer(access_log_file)
+        .with_timer(ShanghaiTime)
+        .with_target(true)
+        .with_ansi(false)
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
+        .with_filter(EnvFilter::new("access_log=info"));
     let (non_blocking_appender, guard) = NonBlockingBuilder::default()
         .buffered_lines_limit(10)
         .finish(app_file);
-    let file_layer = tracing_subscriber::fmt::Layer::new()
+    let app_file_layer = tracing_subscriber::fmt::Layer::new()
         .with_timer(ShanghaiTime)
         .with_target(true)
         .with_line_number(true)
         .with_ansi(false)
         .with_writer(non_blocking_appender)
-        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
+        .with_filter(
+            EnvFilter::new("info").add_directive("access_log=off".parse().unwrap()), // Allow access_log at INFO level
+        );
     let console_layer = FmtLayer::new()
         .with_timer(ShanghaiTime)
         .with_target(true)
@@ -202,7 +236,8 @@ fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
 
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::filter::LevelFilter::TRACE)
-        .with(file_layer);
+        .with(access_log_layer)
+        .with(app_file_layer);
     let show_console = app_config
         .logging
         .clone()
@@ -273,7 +308,18 @@ async fn app_with_error(app_config: AppConfig) -> Result<(), anyhow::Error> {
             get(get_sync_task_running_logs_summary_group_by_sync_task_id),
         )
         .with_state(cloned_shared_state);
-    let final_route = Router::new().nest("/api", app);
+
+    let middleware = ServiceBuilder::new()
+        .set_x_request_id(MakeRequestUuid)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(RequestIdSpan)
+                .on_response(AccelogOnResponse)
+                .on_failure(|_: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {}),
+        );
+    let final_route = Router::new().nest("/api", app).layer(
+        middleware, // Add access log layer here
+    );
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9394").await?;
     axum::serve(listener, final_route).await?;
     Ok(())
