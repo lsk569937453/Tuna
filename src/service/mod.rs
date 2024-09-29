@@ -15,7 +15,7 @@ macro_rules! handle_response {
             )
                 .into_response()),
             Err(e) => {
-                error!("{}", e);
+                error!("{:?}", e);
                 Ok((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response())
             }
         }

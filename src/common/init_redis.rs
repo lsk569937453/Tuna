@@ -1,6 +1,7 @@
 use redis::cluster::{ClusterClient, ClusterClientBuilder};
 
 use std::time::Duration;
+use tokio::time::timeout;
 
 use crate::config::tuna_config::RedisConfig;
 
@@ -18,7 +19,8 @@ pub async fn init_redis(redis_config: &RedisConfig) -> Result<ClusterClient, any
         .response_timeout(Duration::from_secs(5))
         .build()?;
     //如果redis集群不可用，会报错
-    let _ = client.get_async_connection().await?;
-
+    let _ = timeout(Duration::from_secs(5), client.get_async_connection())
+        .await
+        .map_err(|_| anyhow!("Can not get redis connection."))?;
     Ok(client)
 }

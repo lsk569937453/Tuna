@@ -112,7 +112,7 @@ impl SqlLogDao {
         if let Some(end) = end_time {
             query.push_str(&format!(" AND sql_timestamp <= '{}'", end));
         }
-        query.push_str(" ORDER BY timestamp DESC");
+        query.push_str(" ORDER BY timestamp DESC limit 1000");
 
         // Execute the query
         let result = client.query(&query).fetch_all::<SqlLogResponse>().await?;

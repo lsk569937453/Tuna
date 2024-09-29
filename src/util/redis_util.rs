@@ -21,6 +21,10 @@ pub async fn lock(
     let set_options = SetOptions::default()
         .conditional_set(ExistenceCheck::NX)
         .with_expiration(redis::SetExpiry::PX(ttl as u64));
+    info!(
+        "start set the lock:|key:{:?}|value:{}|ttl:{}",
+        key, val, ttl
+    );
     let result: Option<Value> = cluster_connection
         .set_options(key.clone(), val.clone(), set_options)
         .await?;

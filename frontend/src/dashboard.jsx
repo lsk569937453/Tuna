@@ -17,7 +17,13 @@ function Dashboard() {
     const [dataPerMinuteGroupByTaskId, setDataPerMinuteGroupByTaskId] = useState([]);
     const [dataPerdayGroupByTaskId, setDataPerdayGroupByTaskId] = useState([]);
     const [taskTableData, setTaskTableData] = useState([]);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            window.location.reload();
+        }, 5000); // 5000 milliseconds = 5 seconds
 
+        return () => clearInterval(interval); // Cleanup on unmount
+    }, []);
     useEffect(() => {
         getDataPerMinute();
         getDataPerDay();
@@ -127,6 +133,9 @@ function Dashboard() {
             ]
         };
     }
+    let historyTheft = [
+        ["2018-08-15T2:04:01.339Z", 8], ["2018-08-15T10:04:01.339Z", 1], ["2018-08-15T10:14:13.914Z", 2], ["2018-08-15T10:40:03.147Z", 3], ["2018-08-15T11:50:14.335Z", 4]
+    ]
     const optionsForDataPerMinuteGroupByTaskId = () => {
         if (!dataPerMinuteGroupByTaskId || !dataPerMinuteGroupByTaskId.all_minutes || !dataPerMinuteGroupByTaskId.list || dataPerMinuteGroupByTaskId.list.length === 0) {
             return {
@@ -171,9 +180,13 @@ function Dashboard() {
             },
             xAxis: [
                 {
-                    type: 'category',
+                    type: 'time',
                     boundaryGap: false,
-                    data: dataPerMinuteGroupByTaskId.all_minutes
+                    axisLabel: {
+                        formatter: (function (value) {
+                            return moment(value).format('HH:mm');
+                        })
+                    }
                 }
             ],
             yAxis: [
@@ -183,16 +196,12 @@ function Dashboard() {
                     type: 'value'
                 }
             ],
-            series: dataPerMinuteGroupByTaskId?.list.map(task => ({
-                name: task.sync_task_name,  // Sync task name for each series
-                data: task.total_logs,      // Corresponding logs data
-                type: 'line',                // Type of chart (bar in this case)
-                emphasis: {
-                    focus: 'series'
-                },
-                stack: 'Total',
-
-            }))
+            series: [{
+                name: 'Fuel Theft',
+                type: 'line',
+                itemStyle: { normal: { areaStyle: { type: 'default' } } },
+                data: historyTheft
+            }]
         };
     }
     const optionsForDataPerDay = () => {
@@ -284,7 +293,7 @@ function Dashboard() {
                 emphasis: {
                     focus: 'series'
                 },
-                stack: 'Total',
+                // stack: 'Total',
 
             }))
         };

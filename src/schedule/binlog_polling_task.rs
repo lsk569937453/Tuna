@@ -62,7 +62,7 @@ impl BinlogPollingTask {
             sync_task_dao,
         }
     }
-    #[instrument(name = "sync binlog")]
+    #[instrument(name = "sync binlog", skip(self),fields(sync_task_id = %self.sync_task_id))]
 
     pub async fn run(&self) {
         if let Err(e) = self.run_with_error().await {
