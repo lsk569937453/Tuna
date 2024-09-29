@@ -96,14 +96,10 @@ impl SqlLogDao {
         sync_task_id: Option<u32>,
         start_time: Option<String>,
         end_time: Option<String>,
+        client_ip: Option<String>,
     ) -> Result<Vec<SqlLogResponse>, anyhow::Error> {
         // Start building the base SQL query
         let mut query = String::from("SELECT * FROM sql_logs WHERE 1=1");
-
-        // Append conditions based on the provided options
-        if let Some(task_id) = sync_task_id {
-            query.push_str(&format!(" AND sync_task_id = {}", task_id));
-        }
 
         if let Some(start) = start_time {
             query.push_str(&format!(" AND sql_timestamp >= '{}'", start));
@@ -112,12 +108,21 @@ impl SqlLogDao {
         if let Some(end) = end_time {
             query.push_str(&format!(" AND sql_timestamp <= '{}'", end));
         }
+
+        // Append conditions based on the provided options
+        if let Some(task_id) = sync_task_id {
+            query.push_str(&format!(" AND sync_task_id = {}", task_id));
+        }
+        // Append conditions based on the provided options
+        if let Some(client_ip) = client_ip {
+            query.push_str(&format!(" AND client_ip = '{}'", client_ip));
+        }
         query.push_str(" ORDER BY timestamp DESC limit 1000");
 
         // Execute the query
         let result = client.query(&query).fetch_all::<SqlLogResponse>().await?;
 
-        info!("query_logs: {:?}", result);
+        info!("sql:{},", query);
 
         Ok(result)
     }

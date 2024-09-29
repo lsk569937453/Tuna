@@ -145,6 +145,7 @@ async fn query_logs_with_error(
         query_logs_req.sync_task_id,
         query_logs_req.start_time,
         query_logs_req.end_time,
+        query_logs_req.client_ip,
     )
     .await?;
     let data = BaseResponse {
