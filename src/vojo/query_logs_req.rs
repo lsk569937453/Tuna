@@ -5,4 +5,5 @@ pub struct QueryLogsReq {
     pub sync_task_id: Option<u32>,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
+    pub client_ip: Option<String>,
 }
