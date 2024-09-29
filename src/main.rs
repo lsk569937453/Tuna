@@ -1,19 +1,12 @@
-use axum::extract::Request;
 use binlog::binlog_realtime::test_binlog_with_realtime;
 use common::access_log_layer::AccelogOnResponse;
 use common::init_clickhouse::init_clickhouse;
 use common::init_redis;
 use std::time::Duration;
 use tower_http::classify::ServerErrorsFailureClass;
-use tower_http::trace::DefaultMakeSpan;
-use tower_http::trace::DefaultOnResponse;
 use tower_http::trace::OnResponse;
-use tower_http::LatencyUnit;
 use tower_http::ServiceBuilderExt;
-use tracing::Level;
 
-use axum::body::Bytes;
-use axum::response::Response;
 use config::tuna_config::AppConfig;
 use schedule::sync_redis::main_sync_redis_loop_with_error;
 use service::audit_task_result_service::{

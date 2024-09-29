@@ -1,6 +1,4 @@
 use axum::http;
-use http::header::HeaderValue;
-use uuid::Uuid;
 #[derive(Clone)]
 pub struct RequestIdSpan;
 

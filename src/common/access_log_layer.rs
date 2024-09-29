@@ -1,9 +1,7 @@
 use axum::response::Response;
 use std::time::Duration;
 use tower_http::trace::OnResponse;
-use tower_http::LatencyUnit;
 use tracing::Span;
-use tracing_subscriber::fmt::format;
 #[derive(Clone, Debug)]
 pub struct AccelogOnResponse;
 impl<B> OnResponse<B> for AccelogOnResponse {
