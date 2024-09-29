@@ -2,6 +2,7 @@ use crate::common::app_state::AppState;
 use crate::dao::sql_logs_dao::SqlLogDao;
 use crate::dao::sync_task_dao::SyncTaskDao;
 use crate::handle_response;
+use crate::util::time_utils::get_time_axis_data;
 use crate::vojo::base_response::BaseResponse;
 use crate::vojo::logs_per_day_groupby_sync_task_id::LogsPerDayGroupbySyncTaskIdItem;
 use crate::vojo::logs_per_day_groupby_sync_task_id::LogsPerDayGroupbySyncTaskIdRes;
@@ -48,6 +49,7 @@ pub async fn get_sql_logs_per_minute_groupby_sync_task_id(
 async fn get_sql_logs_per_minute_groupby_sync_task_id_with_error(
     app_state: AppState,
 ) -> Result<String, anyhow::Error> {
+    let times_data = get_time_axis_data()?;
     let logs =
         SqlLogDao::get_logs_per_minute_groupby_sync_task_id(app_state.clickhouse_client).await?;
     let mut map = HashMap::new();
@@ -57,17 +59,17 @@ async fn get_sql_logs_per_minute_groupby_sync_task_id_with_error(
         sync_task_map.insert(log.sync_task_id, log.total_logs);
         sync_task_id_set.insert(log.sync_task_id);
     }
-    let all_minutes: Vec<String> = {
-        let mut minutes = map.keys().cloned().collect::<Vec<String>>();
-        minutes.sort();
-        minutes
-    };
+    let all_minutes: Vec<String> = times_data;
     let mut result = vec![];
     for sync_task_id in sync_task_id_set {
         let mut total_logs = vec![];
         for minute in &all_minutes {
-            let minute_map = map.get(minute).ok_or(anyhow!("Map get error, not found"))?;
-            total_logs.push(*minute_map.get(&sync_task_id).unwrap_or(&0));
+            let minute_map = map.get(minute);
+            if let Some(minute_map) = minute_map {
+                total_logs.push(*minute_map.get(&sync_task_id).unwrap_or(&0));
+            } else {
+                total_logs.push(0);
+            }
         }
         let task_name = SyncTaskDao::get_task(&app_state.db_pool, sync_task_id as i32)
             .await?

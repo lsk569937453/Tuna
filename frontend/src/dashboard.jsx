@@ -180,13 +180,9 @@ function Dashboard() {
             },
             xAxis: [
                 {
-                    type: 'time',
+                    type: 'category',
                     boundaryGap: false,
-                    axisLabel: {
-                        formatter: (function (value) {
-                            return moment(value).format('HH:mm');
-                        })
-                    }
+                    data: dataPerMinuteGroupByTaskId.all_minutes
                 }
             ],
             yAxis: [
@@ -196,12 +192,16 @@ function Dashboard() {
                     type: 'value'
                 }
             ],
-            series: [{
-                name: 'Fuel Theft',
-                type: 'line',
-                itemStyle: { normal: { areaStyle: { type: 'default' } } },
-                data: historyTheft
-            }]
+            series: dataPerMinuteGroupByTaskId?.list.map(task => ({
+                name: task.sync_task_name,  // Sync task name for each series
+                data: task.total_logs,      // Corresponding logs data
+                type: 'line',                // Type of chart (bar in this case)
+                emphasis: {
+                    focus: 'series'
+                },
+                stack: 'Total',
+
+            }))
         };
     }
     const optionsForDataPerDay = () => {

@@ -187,7 +187,7 @@ impl FormatTime for ShanghaiTime {
         write!(w, "{}", shanghai_now.format("%Y-%m-%d %H:%M:%S%.3f"))
     }
 }
-fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
+fn setup_logger(app_config: &AppConfig) -> Result<(), anyhow::Error> {
     let app_file = RollingFileAppender::builder()
         .rotation(Rotation::DAILY) // rotate log files once every hour
         .filename_prefix("application")
@@ -207,15 +207,13 @@ fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
         .with_ansi(false)
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
         .with_filter(EnvFilter::new("access_log=info"));
-    let (non_blocking_appender, guard) = NonBlockingBuilder::default()
-        .buffered_lines_limit(10)
-        .finish(app_file);
+
     let app_file_layer = tracing_subscriber::fmt::Layer::new()
         .with_timer(ShanghaiTime)
         .with_target(true)
         .with_line_number(true)
         .with_ansi(false)
-        .with_writer(non_blocking_appender)
+        .with_writer(app_file)
         .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
         .with_filter(
             EnvFilter::new("info").add_directive("access_log=off".parse().unwrap()), // Allow access_log at INFO level
@@ -244,7 +242,7 @@ fn setup_logger(app_config: &AppConfig) -> Result<WorkerGuard, anyhow::Error> {
         subscriber.init();
     }
 
-    Ok(guard)
+    Ok(())
 }
 
 async fn app_with_error(app_config: AppConfig) -> Result<(), anyhow::Error> {
