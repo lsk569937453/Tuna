@@ -153,7 +153,7 @@ ORDER BY minute",
             .query(
                 "SELECT 
     formatDateTime (
-        toStartOfMinute (timestamp), '%R'
+        toStartOfMinute (timestamp), '%Y-%m-%d %H:%i:%S'
     ) AS minute, 
     sync_task_id,  
     count() AS total_logs

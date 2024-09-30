@@ -20,7 +20,7 @@ function Dashboard() {
     useEffect(() => {
         const interval = setInterval(() => {
             window.location.reload();
-        }, 5000); // 5000 milliseconds = 5 seconds
+        }, 10000000); // 5000 milliseconds = 5 seconds
 
         return () => clearInterval(interval); // Cleanup on unmount
     }, []);
@@ -133,11 +133,9 @@ function Dashboard() {
             ]
         };
     }
-    let historyTheft = [
-        ["2018-08-15T2:04:01.339Z", 8], ["2018-08-15T10:04:01.339Z", 1], ["2018-08-15T10:14:13.914Z", 2], ["2018-08-15T10:40:03.147Z", 3], ["2018-08-15T11:50:14.335Z", 4]
-    ]
+
     const optionsForDataPerMinuteGroupByTaskId = () => {
-        if (!dataPerMinuteGroupByTaskId || !dataPerMinuteGroupByTaskId.all_minutes || !dataPerMinuteGroupByTaskId.list || dataPerMinuteGroupByTaskId.list.length === 0) {
+        if (!dataPerMinuteGroupByTaskId || !dataPerMinuteGroupByTaskId.list || dataPerMinuteGroupByTaskId.list.length === 0) {
             return {
 
                 xAxis: {
@@ -180,16 +178,17 @@ function Dashboard() {
             },
             xAxis: [
                 {
-                    type: 'category',
-                    boundaryGap: false,
-                    data: dataPerMinuteGroupByTaskId.all_minutes
+                    type: 'time', boundaryGap: false,
+
                 }
             ],
             yAxis: [
                 {
                     name: '同步sql条数',
 
-                    type: 'value'
+                    type: 'value', boundaryGap: [0, '100%'], min: 0.5
+
+
                 }
             ],
             series: dataPerMinuteGroupByTaskId?.list.map(task => ({
@@ -199,8 +198,7 @@ function Dashboard() {
                 emphasis: {
                     focus: 'series'
                 },
-                stack: 'Total',
-
+                showSymbol: false,
             }))
         };
     }

@@ -14,6 +14,7 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::Json;
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -50,6 +51,7 @@ async fn get_sql_logs_per_minute_groupby_sync_task_id_with_error(
     app_state: AppState,
 ) -> Result<String, anyhow::Error> {
     let times_data = get_time_axis_data()?;
+    info!("times_data: {:?}", times_data);
     let logs =
         SqlLogDao::get_logs_per_minute_groupby_sync_task_id(app_state.clickhouse_client).await?;
     let mut map = HashMap::new();
@@ -62,23 +64,23 @@ async fn get_sql_logs_per_minute_groupby_sync_task_id_with_error(
     let all_minutes: Vec<String> = times_data;
     let mut result = vec![];
     for sync_task_id in sync_task_id_set {
-        let mut total_logs = vec![];
+        let mut hash_map = IndexMap::new();
         for minute in &all_minutes {
             let minute_map = map.get(minute);
             if let Some(minute_map) = minute_map {
-                total_logs.push(*minute_map.get(&sync_task_id).unwrap_or(&0));
+                hash_map.insert(minute.clone(), *minute_map.get(&sync_task_id).unwrap_or(&0));
             } else {
-                total_logs.push(0);
+                hash_map.insert(minute.clone(), 0);
             }
         }
         let task_name = SyncTaskDao::get_task(&app_state.db_pool, sync_task_id as i32)
             .await?
             .ok_or(anyhow!("Can not find task"))?
             .task_name;
-        let ss = LogsPerminuteGroupbySyncTaskIdResItem::new(task_name, total_logs);
+        let ss = LogsPerminuteGroupbySyncTaskIdResItem::new(task_name, hash_map);
         result.push(ss);
     }
-    let data = LogsPerminuteGroupbySyncTaskIdRes::new(all_minutes, result);
+    let data = LogsPerminuteGroupbySyncTaskIdRes::new(result);
     let data = BaseResponse {
         response_code: 0,
         response_object: data,

@@ -1,19 +1,26 @@
+use chrono::Duration;
 use chrono::Local;
+use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 pub fn get_time_axis_data() -> Result<Vec<String>, anyhow::Error> {
-    // Get the current local time
-    let current_time = Local::now().time();
+    let now = Local::now();
 
-    // Create a starting time from midnight (00:00)
-    let start_time = NaiveTime::from_hms_opt(0, 0, 0).ok_or(anyhow!(""))?;
+    // Get the start of the current day (midnight)
+    let today = now.date_naive();
+    let start_of_day = NaiveDateTime::new(today, NaiveTime::from_hms(0, 0, 0));
 
-    // Collect all the times in "hh:mm" format from start_time to current_time
-    let mut times = Vec::new();
-    let mut time = start_time;
-    while time <= current_time {
-        times.push(time.format("%H:%M").to_string());
-        // Add one minute to the time
-        time += chrono::Duration::minutes(1);
+    // Create a list to store the timestamps
+    let mut time_list = Vec::new();
+
+    // Iterate from the start of the day, incrementing one second at a time
+    let mut current_time = start_of_day;
+    while current_time <= now.naive_local() {
+        // Format the current time as "YYYY-MM-DD HH:MM:SS" and add to the list
+        time_list.push(current_time.format("%Y-%m-%d %H:%M:00").to_string());
+
+        // Increment by 1 second
+        current_time += Duration::minutes(1);
     }
-    Ok(times)
+
+    Ok(time_list)
 }
