@@ -55,8 +55,6 @@ use snowflake::SnowflakeIdGenerator;
 use sqlx::mysql::MySqlPoolOptions;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing_appender::non_blocking::NonBlockingBuilder;
-use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::fmt::format::Writer;
@@ -105,7 +103,7 @@ async fn main() {
 async fn main_with_error() -> Result<(), anyhow::Error> {
     let app_config = AppConfig::load_config();
     println!("app_config:{:?}", app_config);
-    let _work_guard = setup_logger(&app_config)?;
+    setup_logger(&app_config)?;
 
     let cli = Cli::parse();
 

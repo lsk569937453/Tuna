@@ -7,6 +7,7 @@ CREATE TABLE sql_logs (
     client_ip String DEFAULT '0.0.0.0',
     sql_timestamp DateTime(3) DEFAULT now64 (),
     timestamp DateTime(3) DEFAULT now64 (),
-     query_ngram MATERIALIZED ngrambf_v1(query, 3, 512, 3, 0) 
+    INDEX query_text_idx query TYPE ngrambf_v1(20, 307200, 2, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY (sync_task_id, sql_timestamp)
+SETTINGS index_granularity = 8192;

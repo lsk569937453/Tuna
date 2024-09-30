@@ -13,7 +13,7 @@ pub fn get_time_axis_data() -> Result<Vec<String>, anyhow::Error> {
     while time <= current_time {
         times.push(time.format("%H:%M").to_string());
         // Add one minute to the time
-        time = time + chrono::Duration::minutes(1);
+        time += chrono::Duration::minutes(1);
     }
     Ok(times)
 }
