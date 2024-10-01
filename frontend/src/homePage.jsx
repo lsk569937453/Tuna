@@ -12,6 +12,7 @@ import { useNavigate, NavLink } from "react-router-dom";
 import 'moment/dist/locale/zh-cn';
 import AuditPage from "./auditPage";
 import AuditResultPage from "./auditResultPage";
+import SqlLogPage from "./sqlLogPage";
 const customTheme = {
     root: {
         base: 'inherit',
@@ -26,24 +27,7 @@ function HomePage() {
     const [cookies, setCookie, removeCookie] = useCookies(['guestAuthority'])
     const navigate = useNavigate();
 
-    // useEffect(() => {
-    //     console.log("cookie is" + cookies);
-    //     if (cookies.guestAuthority === undefined) {
-    //         navigate("/login");
-    //     }
-    // }, []);
 
-    // useEffect(() => {
-    //     let currentdate = moment().format('dddd YYYY/MM/DD, HH:mm:ss');
-    //     setCurrentDate(currentdate);
-    //     const interval = setInterval(() => {
-    //         console.log(moment.locale());
-    //         let currentdate = moment().format('dddd YYYY/MM/DD, HH:mm:ss');
-    //         setCurrentDate(currentdate);
-
-    //     }, 1000);
-    //     return () => clearInterval(interval);
-    // }, []);
 
 
     const clearCookie = () => {
@@ -79,6 +63,9 @@ function HomePage() {
                                 <Sidebar.Item icon={HiChip} onClick={() => navigate('/auditResultPage')}>
                                     稽核结果
                                 </Sidebar.Item>
+                                <Sidebar.Item icon={HiChip} onClick={() => navigate('/sqlLogPage')}>
+                                    日志检索
+                                </Sidebar.Item>
 
                             </Sidebar.ItemGroup>
                         </Sidebar.Items>
@@ -97,6 +84,7 @@ function HomePage() {
                             <Route path="taskPage" element={<TaskPage />} />
                             <Route path="auditPage" element={<AuditPage />} />
                             <Route path="auditResultPage" element={<AuditResultPage />} />
+                            <Route path="sqlLogPage" element={<SqlLogPage />} />
 
 
                         </Route>
