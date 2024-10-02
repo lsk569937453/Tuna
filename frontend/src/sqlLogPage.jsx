@@ -15,10 +15,30 @@ import Datetime from 'react-datetime';
 const itemsPerPage = 10;
 
 function SqlLogPage() {
+    const [startDateTime, setStartDateTime] = useState(null);
+    const [endDateTime, setEndDateTime] = useState(null);
 
+    const handleStartDateChange = (date) => {
+        // console.log(date.format('YYYY-MM-DD HH:mm:ss'));  // Convert the selected date to a formatted string
+
+        setStartDateTime(date);
+    };
+    const handleEndDateChange = (date) => {
+        // console.log(date.format('YYYY-MM-DD HH:mm:ss'));  // Convert the selected date to a formatted string
+
+        setEndDateTime(date);
+    };
     const [currentPage, setCurrentPage] = useState(1);
 
-    const onPageChange = (page) => { ; setCurrentPage(page) };
+    const onPageChange = (page) => {
+
+        const startIdx = (page - 1) * itemsPerPage;
+        const endIdx = startIdx + itemsPerPage;
+
+        // Set the current page data using the slice of the full data
+        setCurrentTableData(allTaskTableData.slice(startIdx, endIdx));
+        setCurrentPage(page);
+    };
 
     const [allTaskTableData, setAllTaskTableData] = useState([]);
     const [currentTableData, setCurrentTableData] = useState([]);
@@ -28,7 +48,11 @@ function SqlLogPage() {
 
 
     const getSqlLogList = () => {
-        Request.post("/api/sqlLogs", {}).then((res) => {
+        const requestBody = {
+            ...(startDateTime && { start_time: startDateTime.format('YYYY-MM-DD HH:mm:ss') }),
+            ...(endDateTime && { end_time: endDateTime.format('YYYY-MM-DD HH:mm:ss') }),
+        };
+        Request.post("/api/sqlLogs", requestBody).then((res) => {
             console.log(res);
             const mesArray = res.data.message.map(
                 ({
@@ -71,8 +95,16 @@ function SqlLogPage() {
 
             <div className="p-4 flex-col">
                 <div className="flex flex-row gap-x-4">
-                    <div className="flex justify-center items-center gap-x-1"><div>起始时间:</div><Datetime /></div>
-                    <div className="flex justify-center items-center gap-x-1"> <div>结束时间:</div><Datetime className="rounded-md" /></div>
+                    <div className="flex justify-center items-center gap-x-1"><div>起始时间:</div>
+                        <Datetime value={startDateTime}
+                            inputProps={{ placeholder: '请选择起始时间' }}
+                            onChange={handleStartDateChange} />
+                    </div>
+                    <div className="flex justify-center items-center gap-x-1"> <div>结束时间:</div>
+                        <Datetime value={endDateTime}
+                            inputProps={{ placeholder: '请选择起始时间' }}
+                            onChange={handleEndDateChange} />
+                    </div>
 
                     <div className="flex justify-center items-center gap-x-1"> <div>关键字:</div><input type="text" className="rounded-md" />
                     </div>
@@ -86,39 +118,50 @@ function SqlLogPage() {
 
 
                 </div>
-                <div className="overflow-auto max-h-[800px]">
-                    <Table>
-                        <Table.Head>
-                            <Table.HeadCell className="font-bold text-center text-xl">任务id</Table.HeadCell>
-                            <Table.HeadCell className="font-bold text-center text-xl">Sql</Table.HeadCell>
-                            <Table.HeadCell className="font-bold text-center text-xl">Sql结果</Table.HeadCell>
+                <div className="relative">
 
-                            <Table.HeadCell className="font-bold text-center text-xl">执行时间</Table.HeadCell>
-                            <Table.HeadCell className="font-bold text-center text-xl">机器IP</Table.HeadCell>
-                            <Table.HeadCell className="font-bold text-center text-xl">sql时间戳</Table.HeadCell>
+                    <div className="overflow-auto max-h-[800px]">
+                        <Table>
+                            <Table.Head>
+                                <Table.HeadCell className="font-bold text-center text-xl">任务id</Table.HeadCell>
+                                <Table.HeadCell className="font-bold text-center text-xl">Sql</Table.HeadCell>
+                                <Table.HeadCell className="font-bold text-center text-xl">Sql结果</Table.HeadCell>
 
-                        </Table.Head>
-                        <Table.Body className="divide-y">
-                            {currentTableData.map((row, index) => (
-                                <Table.Row className="bg-white dark:border-gray-700 dark:bg-gray-800" key={index}>
+                                <Table.HeadCell className="font-bold text-center text-xl">执行时间(毫秒)</Table.HeadCell>
+                                <Table.HeadCell className="font-bold text-center text-xl">机器IP</Table.HeadCell>
+                                <Table.HeadCell className="font-bold text-center text-xl">sql时间戳</Table.HeadCell>
 
-                                    <Table.Cell className="text-center">  {row.sync_task_id}</Table.Cell>
-                                    <Table.Cell className="text-center">  {row.query}</Table.Cell>
-                                    <Table.Cell className="text-center">  {row.result}</Table.Cell>
+                            </Table.Head>
+                            <Table.Body className="divide-y">
+                                {currentTableData.map((row, index) => (
+                                    <Table.Row className="bg-white dark:border-gray-700 dark:bg-gray-800" key={index}>
 
-                                    <Table.Cell className="text-center">  {row.execution_time}</Table.Cell>
-                                    <Table.Cell className="text-center">  {row.client_ip}</Table.Cell>
-                                    <Table.Cell className="text-center">  {row.sql_timestamp}</Table.Cell>
+                                        <Table.Cell className="text-center">  {row.sync_task_id}</Table.Cell>
+                                        <Table.Cell className="text-center">  {row.query}</Table.Cell>
+                                        <Table.Cell className="text-center">  {row.result}</Table.Cell>
+
+                                        <Table.Cell className="text-center">  {row.execution_time}</Table.Cell>
+                                        <Table.Cell className="text-center">  {row.client_ip}</Table.Cell>
+                                        <Table.Cell className="text-center">  {row.sql_timestamp}</Table.Cell>
 
 
-                                </Table.Row>
-                            ))}
+                                    </Table.Row>
+                                ))}
 
-                        </Table.Body>
-                    </Table>
+                            </Table.Body>
+                        </Table>
+                    </div>
                 </div>
-                <Pagination layout="table" currentPage={currentPage} totalPages={Math.ceil(allTaskTableData.length / itemsPerPage)} onPageChange={onPageChange} />
+                <div className="sticky bottom-0 bg-white z-10">
 
+                    <Pagination
+
+                        layout="pagination"
+                        previousLabel="前一页"
+                        nextLabel="后一页"
+                        showIcons
+                        currentPage={currentPage} totalPages={Math.ceil(allTaskTableData.length / itemsPerPage)} onPageChange={onPageChange} />
+                </div>
 
             </div>
         </div >
