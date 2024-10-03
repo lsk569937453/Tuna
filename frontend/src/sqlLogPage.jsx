@@ -17,15 +17,12 @@ const itemsPerPage = 10;
 function SqlLogPage() {
     const [startDateTime, setStartDateTime] = useState(null);
     const [endDateTime, setEndDateTime] = useState(null);
+    const [keyword, setKeyword] = useState('');
 
     const handleStartDateChange = (date) => {
-        // console.log(date.format('YYYY-MM-DD HH:mm:ss'));  // Convert the selected date to a formatted string
-
         setStartDateTime(date);
     };
     const handleEndDateChange = (date) => {
-        // console.log(date.format('YYYY-MM-DD HH:mm:ss'));  // Convert the selected date to a formatted string
-
         setEndDateTime(date);
     };
     const [currentPage, setCurrentPage] = useState(1);
@@ -51,6 +48,7 @@ function SqlLogPage() {
         const requestBody = {
             ...(startDateTime && { start_time: startDateTime.format('YYYY-MM-DD HH:mm:ss') }),
             ...(endDateTime && { end_time: endDateTime.format('YYYY-MM-DD HH:mm:ss') }),
+            ...(keyword && { keyword }),
         };
         Request.post("/api/sqlLogs", requestBody).then((res) => {
             console.log(res);
