@@ -18,6 +18,8 @@ function SqlLogPage() {
     const [startDateTime, setStartDateTime] = useState(null);
     const [endDateTime, setEndDateTime] = useState(null);
     const [keyword, setKeyword] = useState('');
+    const [ip, setIp] = useState('');
+    const [syncTaskId, setSyncTaskId] = useState('');
 
     const handleStartDateChange = (date) => {
         setStartDateTime(date);
@@ -49,6 +51,8 @@ function SqlLogPage() {
             ...(startDateTime && { start_time: startDateTime.format('YYYY-MM-DD HH:mm:ss') }),
             ...(endDateTime && { end_time: endDateTime.format('YYYY-MM-DD HH:mm:ss') }),
             ...(keyword && { keyword }),
+            ...(ip && { client_ip: ip }),
+            ...(syncTaskId && { sync_task_id: Number(syncTaskId) }),
         };
         Request.post("/api/sqlLogs", requestBody).then((res) => {
             console.log(res);
@@ -106,7 +110,12 @@ function SqlLogPage() {
 
                     <div className="flex justify-center items-center gap-x-1"> <div>关键字:</div><input type="text" className="rounded-md" />
                     </div>
-
+                    <div className="flex justify-center items-center gap-x-1"> <div>IP:</div>
+                        <input type="text" className="rounded-md" onChange={(e) => setIp(e.target.value)} />
+                    </div>
+                    <div className="flex justify-center items-center gap-x-1"> <div>同步任务Id:</div>
+                        <input type="text" className="rounded-md" onChange={(e) => setSyncTaskId(e.target.value)} />
+                    </div>
                     <Button onClick={() => { getSqlLogList() }}>查询</Button>
 
                 </div>

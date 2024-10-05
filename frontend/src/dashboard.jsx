@@ -123,6 +123,9 @@ function Dashboard() {
                 name: '同步sql条数',
 
                 type: 'value',
+                axisLabel: {
+                    formatter: val => formatter(val)
+                }
 
             },
             series: [
@@ -186,8 +189,10 @@ function Dashboard() {
                 {
                     name: '同步sql条数',
 
-                    type: 'value', boundaryGap: [0, '100%'], min: 0.5
-
+                    type: 'value', boundaryGap: [0, '100%'], min: 0.5,
+                    axisLabel: {
+                        formatter: val => formatter(val)
+                    }
 
                 }
             ],
@@ -218,6 +223,9 @@ function Dashboard() {
                 name: '同步sql条数',
 
                 type: 'value',
+                axisLabel: {
+                    formatter: val => formatter(val)
+                }
 
             },
             series: [
@@ -281,7 +289,10 @@ function Dashboard() {
                 {
                     name: '同步sql条数',
 
-                    type: 'value'
+                    type: 'value',
+                    axisLabel: {
+                        formatter: val => formatter(val)
+                    }
                 }
             ],
             series: dataPerdayGroupByTaskId?.list.map(task => ({
@@ -295,6 +306,30 @@ function Dashboard() {
 
             }))
         };
+    }
+    const formatter = (v) => {
+        v = v.toString()
+        if (v >= 100000000000) {
+            return (v.substring(0, 5) / 10) + '亿'
+        } else if (v >= 10000000000) {
+            return (v.substring(0, 4) / 10) + '亿'
+        } else if (v >= 1000000000) {
+            return (v.substring(0, 3) / 10) + '亿'
+        } else if (v >= 100000000) {
+            return (v.substring(0, 2) / 10) + '亿'
+        } else if (v >= 10000000) {
+            return v.substring(0, 4) + '万'
+        } else if (v >= 1000000) {
+            return v.substring(0, 3) + '万'
+        } else if (v >= 100000) {
+            return v.substring(0, 2) + '万'
+        } else if (v >= 10000) {
+            return (v.substring(0, 2) / 10) + '万'
+        } else if (v >= 1000) {
+            return v
+        } else {
+            return v
+        }
     }
     const showTimeDuration = (duration_as_second) => {
         if (!duration_as_second || typeof duration_as_second !== 'number') {
